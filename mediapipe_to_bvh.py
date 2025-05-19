@@ -963,8 +963,8 @@ class MediaPipeToBVH:
 def main():
     """Main function to run the converter"""
     parser = argparse.ArgumentParser(description='Convert video to BVH using MediaPipe')
-    parser.add_argument('input', help='Input video file path')
-    parser.add_argument('output', help='Output BVH file path')
+    parser.add_argument('--input', help='Input video file path')
+    parser.add_argument('--output', help='Output BVH file path')
     parser.add_argument('--fps', type=float, default=30.0, help='Output BVH frame rate (default: 30)')
     
     args = parser.parse_args()
