@@ -172,8 +172,12 @@ def create_mediapipe_skeleton(fps=30) -> Skeleton:
     skeleton.create_joint("LeftToeBase", offset=(0, 0, 10), parent="LeftFoot")
     
     # Right leg chain
-    skeleton.create_joint("RightUpLeg", offset=(-10, -10, 0), parent="Hips")
-    skeleton.create_joint("RightLeg", offset=(0, -45, 0), parent="RightUpLeg")
+    # skeleton.create_joint("RightUpLeg", offset=(-10, -10, 0), parent="Hips")
+    # skeleton.create_joint("RightLeg", offset=(0, -45, 0), parent="RightUpLeg")
+    # skeleton.create_joint("RightFoot", offset=(0, -45, 0), parent="RightLeg")
+    # skeleton.create_joint("RightToeBase", offset=(0, 0, 10), parent="RightFoot")
+	skeleton.create_joint("RightUpLeg", offset=(-10, -10, 0), parent="Hips")
+	skeleton.create_joint("RightLeg", offset=(0, -45, 0), parent="RightUpLeg")
     skeleton.create_joint("RightFoot", offset=(0, -45, 0), parent="RightLeg")
     skeleton.create_joint("RightToeBase", offset=(0, 0, 10), parent="RightFoot")
     
