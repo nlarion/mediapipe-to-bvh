@@ -1,10 +1,10 @@
-Pythonimport cv2
+import cv2
 import mediapipe as mp
 from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
 import numpy as np
 from scipy.spatial.transform import Rotation as R
-import bvhio # For writing BVH files [3, 4, 5, 6]
+import bvhio # For writing BVH files
 import argparse
 import os
 
@@ -14,25 +14,28 @@ import os
 # 'lm_source' can be a single landmark, a list of landmarks to average, or a lambda for custom logic.
 # The order of joints matters for BVH hierarchy construction and motion data ordering.
 # Rotation order for Euler angles is ZYX.
-BVH_SKELETON_DEF = + lm_dict) / 2,
+BVH_SKELETON_DEF = [
+    # Root joint - Hips (average of left and right hip)
+    {'name': 'Hips', 'parent': None,
+     'lm_source': lambda lm_dict: (lm_dict[mp.solutions.pose.PoseLandmark.LEFT_HIP] + lm_dict[mp.solutions.pose.PoseLandmark.RIGHT_HIP]) / 2,
      'channels': ['Xposition', 'Yposition', 'Zposition', 'Zrotation', 'Yrotation', 'Xrotation'], 'order': 'ZYX'},
 
     {'name': 'Spine', 'parent': 'Hips',
-     'lm_source': lambda lm_dict: ((lm_dict + lm_dict) / 2 +
-                                   (lm_dict + lm_dict) / 2) / 2,
+     'lm_source': lambda lm_dict: ((lm_dict[mp.solutions.pose.PoseLandmark.LEFT_HIP] + lm_dict[mp.solutions.pose.PoseLandmark.RIGHT_HIP]) / 2 +
+                                   (lm_dict[mp.solutions.pose.PoseLandmark.LEFT_SHOULDER] + lm_dict[mp.solutions.pose.PoseLandmark.RIGHT_SHOULDER]) / 2) / 2,
      'channels': ['Zrotation', 'Yrotation', 'Xrotation'], 'order': 'ZYX'},
     {'name': 'Chest', 'parent': 'Spine',
-     'lm_source': lambda lm_dict: (lm_dict + lm_dict) / 2,
+     'lm_source': lambda lm_dict: (lm_dict[mp.solutions.pose.PoseLandmark.LEFT_SHOULDER] + lm_dict[mp.solutions.pose.PoseLandmark.RIGHT_SHOULDER]) / 2,
      'channels': ['Zrotation', 'Yrotation', 'Xrotation'], 'order': 'ZYX'},
     {'name': 'Neck', 'parent': 'Chest',
-     'lm_source': lambda lm_dict: ((lm_dict + lm_dict) / 2 + lm_dict) / 2, # Approx between shoulders and nose
+     'lm_source': lambda lm_dict: ((lm_dict[mp.solutions.pose.PoseLandmark.LEFT_SHOULDER] + lm_dict[mp.solutions.pose.PoseLandmark.RIGHT_SHOULDER]) / 2 + lm_dict[mp.solutions.pose.PoseLandmark.NOSE]) / 2, # Approx between shoulders and nose
      'channels': ['Zrotation', 'Yrotation', 'Xrotation'], 'order': 'ZYX'},
     {'name': 'Head', 'parent': 'Neck',
      'lm_source': mp.solutions.pose.PoseLandmark.NOSE,
      'channels': ['Zrotation', 'Yrotation', 'Xrotation'], 'order': 'ZYX'},
     {'name': 'HeadEnd', 'parent': 'Head',
      'lm_source': mp.solutions.pose.PoseLandmark.NOSE, 'offset_dir': np.array([0, 0.1, 0]), # Offset from NOSE
-     'channels':, 'order': 'ZYX'}, # End Site
+     'channels': [], 'order': 'ZYX'}, # End Site
 
     # Left Arm
     {'name': 'LeftShoulder', 'parent': 'Chest',
@@ -46,7 +49,7 @@ BVH_SKELETON_DEF = + lm_dict) / 2,
      'channels': ['Zrotation', 'Yrotation', 'Xrotation'], 'order': 'ZYX'},
     {'name': 'LeftHandEnd', 'parent': 'LeftWrist',
      'lm_source': mp.solutions.pose.PoseLandmark.LEFT_INDEX, 'offset_dir': np.array([0,0,-0.05]),
-     'channels':, 'order': 'ZYX'},
+     'channels': [], 'order': 'ZYX'},
 
     # Right Arm
     {'name': 'RightShoulder', 'parent': 'Chest',
@@ -60,7 +63,7 @@ BVH_SKELETON_DEF = + lm_dict) / 2,
      'channels': ['Zrotation', 'Yrotation', 'Xrotation'], 'order': 'ZYX'},
     {'name': 'RightHandEnd', 'parent': 'RightWrist',
      'lm_source': mp.solutions.pose.PoseLandmark.RIGHT_INDEX, 'offset_dir': np.array([0,0,-0.05]),
-     'channels':, 'order': 'ZYX'},
+     'channels': [], 'order': 'ZYX'},
 
     # Left Leg
     {'name': 'LeftUpLeg', 'parent': 'Hips',
@@ -74,7 +77,7 @@ BVH_SKELETON_DEF = + lm_dict) / 2,
      'channels': ['Zrotation', 'Yrotation', 'Xrotation'], 'order': 'ZYX'},
     {'name': 'LeftToeEnd', 'parent': 'LeftFoot',
      'lm_source': mp.solutions.pose.PoseLandmark.LEFT_FOOT_INDEX, 'offset_dir': np.array([0,0,0.05]),
-     'channels':, 'order': 'ZYX'},
+     'channels': [], 'order': 'ZYX'},
 
     # Right Leg
     {'name': 'RightUpLeg', 'parent': 'Hips',
@@ -88,7 +91,7 @@ BVH_SKELETON_DEF = + lm_dict) / 2,
      'channels': ['Zrotation', 'Yrotation', 'Xrotation'], 'order': 'ZYX'},
     {'name': 'RightToeEnd', 'parent': 'RightFoot',
      'lm_source': mp.solutions.pose.PoseLandmark.RIGHT_FOOT_INDEX, 'offset_dir': np.array([0,0,0.05]),
-     'channels':, 'order': 'ZYX'}
+     'channels': [], 'order': 'ZYX'}
 ]
 
 # --- Helper Functions ---
@@ -105,7 +108,7 @@ def get_joint_world_pos(landmarks_mp_dict, joint_def_entry):
             return np.array([0.0, 0.0, 0.0]) # Or handle more gracefully
         return landmarks_mp_dict[source]
     elif isinstance(source, list): # Average multiple landmarks
-        pts =
+        pts = []
         for lm_idx in source:
             if lm_idx not in landmarks_mp_dict:
                 # print(f"Warning: Landmark {lm_idx.name} not found for averaging in joint {joint_def_entry['name']}. Skipping.")
@@ -132,7 +135,7 @@ def convert_mediapipe_landmarks_to_dict(pose_world_landmarks_from_result):
     landmarks_dict = {}
     if pose_world_landmarks_from_result and pose_world_landmarks_from_result:
         for i, landmark_proto in enumerate(pose_world_landmarks_from_result): # Access landmarks for the first (and assumed only) pose
-            # MediaPipe: Y up, X right, Z towards viewer (closer to camera = smaller Z) [1, 7, 8]
+            # MediaPipe: Y up, X right, Z towards viewer (closer to camera = smaller Z)
             # Common 3D/BVH: Y up, X right, Z forward (away from viewer)
             # So, negate MediaPipe's Z.
             landmarks_dict[mp.solutions.pose.PoseLandmark(i)] = np.array([landmark_proto.x, landmark_proto.y, -landmark_proto.z])
@@ -174,14 +177,14 @@ def get_rotation_from_vectors(vec1, vec2, fallback_axis=None):
     if np.allclose(v1_normalized, -v2_normalized):
         axis_to_use = fallback_axis
         if axis_to_use is None or np.linalg.norm(axis_to_use) < 1e-6:
-            if not np.allclose(v1_normalized, ) and not np.allclose(v1_normalized, [0, -1, 0]):
-                 axis_to_use = np.cross(v1_normalized, )
+            if not np.allclose(v1_normalized, [0, 1, 0]) and not np.allclose(v1_normalized, [0, -1, 0]):
+                 axis_to_use = np.cross(v1_normalized, [0, 1, 0])
             else:
-                 axis_to_use = np.cross(v1_normalized, )
+                 axis_to_use = np.cross(v1_normalized, [1, 0, 0])
         if np.linalg.norm(axis_to_use) < 1e-6: return R.identity() # Should be rare
         axis_to_use = axis_to_use / np.linalg.norm(axis_to_use)
         return R.from_rotvec(np.pi * axis_to_use)
-    # Scipy's align_vectors: finds rotation C such that a is aligned with C @ b [9]
+    # Scipy's align_vectors: finds rotation C such that a is aligned with C @ b
     # We want to rotate v1 to v2, so v2 = C @ v1. align_vectors(a,b) -> C where a ~ C@b
     # So, a=v2_normalized, b=v1_normalized
     rotation, _ = R.align_vectors([v2_normalized], [v1_normalized])
@@ -203,7 +206,7 @@ def main(video_path, output_bvh_path, tpose_frame_num, mediapipe_model_path):
         min_pose_detection_confidence=0.5,
         min_pose_presence_confidence=0.5,
         min_tracking_confidence=0.5,
-        output_segmentation_masks=False) # [1, 2]
+        output_segmentation_masks=False)
     landmarker = vision.PoseLandmarker.create_from_options(options)
 
     cap = cv2.VideoCapture(video_path)
@@ -217,7 +220,7 @@ def main(video_path, output_bvh_path, tpose_frame_num, mediapipe_model_path):
     total_video_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     print(f"Processing video: {video_path} ({fps:.2f} FPS, {total_video_frames} frames)")
 
-    all_frame_motion_data = # CORRECTED: Initialize list
+    all_frame_motion_data = [] # Initialize the list
     tpose_landmarks_dict = None
     tpose_world_positions = None
     bvh_offsets = None
@@ -234,10 +237,10 @@ def main(video_path, output_bvh_path, tpose_frame_num, mediapipe_model_path):
         if current_frame_idx == tpose_frame_num:
             mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
             timestamp_ms = int(cap.get(cv2.CAP_PROP_POS_MSEC) if cap.get(cv2.CAP_PROP_POS_MSEC) > 0 else current_frame_idx * frame_time * 1000)
-            results = landmarker.detect_for_video(mp_image, timestamp_ms) # [1]
+            results = landmarker.detect_for_video(mp_image, timestamp_ms)
 
             if results and results.pose_world_landmarks:
-                tpose_landmarks_dict = convert_mediapipe_landmarks_to_dict(results.pose_world_landmarks)
+                tpose_landmarks_dict = convert_mediapipe_landmarks_to_dict(results.pose_world_landmarks[0])
                 if not tpose_landmarks_dict:
                     print(f"Warning: No landmarks converted from T-pose frame {tpose_frame_num}.")
                 else:
@@ -248,13 +251,13 @@ def main(video_path, output_bvh_path, tpose_frame_num, mediapipe_model_path):
                     chest_tpose_pos_calc = tpose_world_positions.get('Chest', hips_tpose_pos_calc + np.array([0, 0.5, 0]))
                     
                     t_forward = chest_tpose_pos_calc - hips_tpose_pos_calc
-                    if np.linalg.norm(t_forward) < 1e-6: t_forward = np.array() # Default forward Z
+                    if np.linalg.norm(t_forward) < 1e-6: t_forward = np.array([0, 0, 1]) # Default forward Z
                     t_forward_norm = t_forward / np.linalg.norm(t_forward)
                     
-                    temp_up_vector = np.array() # Assuming Y is generally up
+                    temp_up_vector = np.array([0, 1, 0]) # Assuming Y is generally up
                     t_right = np.cross(temp_up_vector, t_forward_norm)
-                    if np.linalg.norm(t_right) < 1e-6: t_right = np.cross(t_forward_norm, np.array()) # If forward is Y-up, use X for right
-                    if np.linalg.norm(t_right) < 1e-6: t_right = np.array() # Absolute fallback
+                    if np.linalg.norm(t_right) < 1e-6: t_right = np.cross(t_forward_norm, np.array([1, 0, 0])) # If forward is Y-up, use X for right
+                    if np.linalg.norm(t_right) < 1e-6: t_right = np.array([1, 0, 0]) # Absolute fallback
                         
                     t_right_norm = t_right / np.linalg.norm(t_right)
                     t_up_norm = np.cross(t_forward_norm, t_right_norm) # Recalculate Up to be orthogonal
@@ -270,6 +273,11 @@ def main(video_path, output_bvh_path, tpose_frame_num, mediapipe_model_path):
         landmarker.close()
         return
 
+    # Close the first landmarker and create a new one for the motion processing
+    # This is necessary because detect_for_video requires monotonically increasing timestamps
+    landmarker.close()
+    landmarker = vision.PoseLandmarker.create_from_options(options)
+    
     cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
     print("Processing video for motion data...")
     processed_frame_count = 0
@@ -286,7 +294,7 @@ def main(video_path, output_bvh_path, tpose_frame_num, mediapipe_model_path):
 
         current_frame_motion = {}
         if results and results.pose_world_landmarks:
-            current_landmarks_dict = convert_mediapipe_landmarks_to_dict(results.pose_world_landmarks)
+            current_landmarks_dict = convert_mediapipe_landmarks_to_dict(results.pose_world_landmarks[0])
             if not current_landmarks_dict:
                 if all_frame_motion_data: all_frame_motion_data.append(all_frame_motion_data[-1])
                 processed_frame_count +=1
@@ -316,19 +324,19 @@ def main(video_path, output_bvh_path, tpose_frame_num, mediapipe_model_path):
             if np.linalg.norm(c_forward) < 1e-6:
                 if all_frame_motion_data and 'Hips' in all_frame_motion_data[-1]:
                     root_euler_angles = list(all_frame_motion_data[-1]['Hips'][3:])
-                root_world_rotation = R.from_euler(hips_joint_def_entry['order'], root_euler_angles, degrees=True) # [10, 11, 12, 13]
+                root_world_rotation = R.from_euler(hips_joint_def_entry['order'], root_euler_angles, degrees=True)
             else:
                 c_forward_norm = c_forward / np.linalg.norm(c_forward)
-                temp_up_vector = np.array()
+                temp_up_vector = np.array([0, 1, 0])
                 c_right = np.cross(temp_up_vector, c_forward_norm)
-                if np.linalg.norm(c_right) < 1e-6: c_right = np.cross(c_forward_norm, np.array())
-                if np.linalg.norm(c_right) < 1e-6: c_right = np.array()
+                if np.linalg.norm(c_right) < 1e-6: c_right = np.cross(c_forward_norm, np.array([1, 0, 0]))
+                if np.linalg.norm(c_right) < 1e-6: c_right = np.array([1, 0, 0])
 
                 c_right_norm = c_right / np.linalg.norm(c_right)
                 c_up_norm = np.cross(c_forward_norm, c_right_norm)
 
                 target_basis_vectors = np.array([c_forward_norm, c_up_norm, c_right_norm]).T # Columns: Fwd, Up, Right
-                source_basis_vectors = np.array([tpose_hips_orientation_vectors, tpose_hips_orientation_vectors[1], tpose_hips_orientation_vectors[2]]).T # Columns: Fwd, Up, Right
+                source_basis_vectors = np.array([tpose_hips_orientation_vectors[0], tpose_hips_orientation_vectors[1], tpose_hips_orientation_vectors[2]]).T # Columns: Fwd, Up, Right
                 
                 # Create rotation matrices from these basis vectors
                 # R_target @ R_source.T gives rotation from source to target
@@ -369,9 +377,9 @@ def main(video_path, output_bvh_path, tpose_frame_num, mediapipe_model_path):
                         local_euler_angles = list(all_frame_motion_data[-1][joint_name])
                     local_rotation = R.from_euler(joint_def_entry['order'], local_euler_angles, degrees=True)
                 else:
-                    bone_orientation_change_world = get_rotation_from_vectors(tpose_bone_vector, current_bone_vector, fallback_axis=np.array())
+                    bone_orientation_change_world = get_rotation_from_vectors(tpose_bone_vector, current_bone_vector, fallback_axis=np.array([0, 1, 0]))
                     parent_abs_world_rotation = parent_world_rotations[parent_name]
-                    local_rotation = parent_abs_world_rotation.inv() * bone_orientation_change_world # [14, 15, 16]
+                    local_rotation = parent_abs_world_rotation.inv() * bone_orientation_change_world
                     local_euler_angles = local_rotation.as_euler(joint_def_entry['order'], degrees=True)
 
                 current_frame_motion[joint_name] = local_euler_angles
@@ -398,61 +406,105 @@ def main(video_path, output_bvh_path, tpose_frame_num, mediapipe_model_path):
         print("No motion data was generated. Exiting.")
         return
 
-    bvh_file = bvhio.Bvh()
-    joint_to_bvh_joint_map = {}
-
-    def add_joint_to_bvh_recursive(skeleton_def_list, current_parent_bvh_joint=None, parent_name_filter=None):
+    # --- Fixed BVH file creation using bvhio ---
+    # Using Joint class for creating hierarchy from scratch
+    joint_to_hierarchy_map = {}
+    
+    def create_joint_hierarchy_recursive(skeleton_def_list, parent_name=None):
+        """Recursively create Joint hierarchy from skeleton definition."""
+        children = []
+        
         for joint_def_entry in skeleton_def_list:
             joint_name = joint_def_entry['name']
-            parent_name = joint_def_entry['parent']
-            if parent_name!= parent_name_filter: continue
-
+            if joint_def_entry['parent'] != parent_name:
+                continue
+            
             offset = bvh_offsets[joint_name]
             channels = joint_def_entry['channels']
-            keyframes_data_for_joint = # CORRECTED: Initialize list
-
-            for frame_motion_dict in all_frame_motion_data:
-                if joint_name in frame_motion_dict:
-                    keyframes_data_for_joint.append(tuple(frame_motion_dict[joint_name]))
-                elif channels:
-                     keyframes_data_for_joint.append(tuple([0.0] * len(channels)))
-
-            if not channels: # End Site
-                if current_parent_bvh_joint:
-                    current_parent_bvh_joint.add_end_site(list(offset))
+            
+            if not channels:  # End Site - skip for now, will be handled differently
                 continue
-
-            bvh_joint_node = bvhio.BvhJoint(name=joint_name, offset=list(offset), channels=channels)
-            if keyframes_data_for_joint:
-                 bvh_joint_node.keyframes = keyframes_data_for_joint
-            else:
-                 bvh_joint_node.keyframes = [(0.0,) * len(channels)] * len(all_frame_motion_data)
-
-            if current_parent_bvh_joint is None:
-                bvh_file.root = bvh_joint_node
-            else:
-                current_parent_bvh_joint.add_child(bvh_joint_node)
-
-            joint_to_bvh_joint_map[joint_name] = bvh_joint_node
-            add_joint_to_bvh_recursive(skeleton_def_list, bvh_joint_node, joint_name)
-
-    add_joint_to_bvh_recursive(BVH_SKELETON_DEF, None, None)
-
-    bvh_file.frames = len(all_frame_motion_data)
-    bvh_file.frame_time = frame_time
-
-    print(f"Writing BVH file to: {output_bvh_path}")
-    bvhio.writeBvh(output_bvh_path, bvh_file, percision=6) # [3, 4]
-    print("BVH file written successfully.")
+            
+            # Create Joint with offset
+            joint = bvhio.Joint(joint_name, tuple(offset))
+            
+            # Set initial rest pose
+            joint.RestPose.Position = tuple(offset)
+            
+            # Process keyframes for this joint
+            for frame_idx, frame_motion_dict in enumerate(all_frame_motion_data):
+                if joint_name in frame_motion_dict:
+                    motion_data = frame_motion_dict[joint_name]
+                    
+                    # For root joint with position and rotation
+                    if 'Xposition' in channels:
+                        pos_data = motion_data[:3]
+                        rot_data = motion_data[3:6]
+                        joint.loadPose(frame_idx)
+                        joint.Position = tuple(pos_data)
+                        joint.setEuler(tuple(rot_data))
+                    else:
+                        # For other joints with only rotation
+                        joint.loadPose(frame_idx)
+                        joint.setEuler(tuple(motion_data))
+                    
+                    joint.writePose(frame_idx)
+            
+            joint_to_hierarchy_map[joint_name] = joint
+            
+            # Recursively process children
+            child_joints = create_joint_hierarchy_recursive(skeleton_def_list, joint_name)
+            
+            # Attach children
+            for child in child_joints:
+                joint.attach(child)
+            
+            children.append(joint)
+        
+        return children
+    
+    # Create the root joint and build hierarchy
+    root_joints = create_joint_hierarchy_recursive(BVH_SKELETON_DEF, None)
+    
+    if not root_joints:
+        print("Error: Could not create joint hierarchy.")
+        return
+    
+    root_joint = root_joints[0]  # Should only be one root
+    
+    # Convert hierarchy to BVH format
+    try:
+        # Get the total number of frames
+        frame_count = len(all_frame_motion_data)
+        
+        # Convert hierarchy to BVH
+        bvh_root = bvhio.convertHierarchyToBvh(root_joint, frame_count)
+        
+        # Create BvhContainer with converted root, frame count, and frame time
+        bvh_container = bvhio.BvhContainer(bvh_root, frame_count, frame_time)
+        
+        print(f"Writing BVH file to: {output_bvh_path}")
+        bvhio.writeBvh(output_bvh_path, bvh_container, percision=6)
+        print("BVH file written successfully.")
+    except Exception as e:
+        print(f"Error during BVH conversion/writing: {e}")
+        print("Attempting alternative method...")
+        
+        # Alternative: Write hierarchy directly
+        try:
+            bvhio.writeHierarchy(output_bvh_path, root_joint, frame_time)
+            print("BVH file written successfully using writeHierarchy.")
+        except Exception as e2:
+            print(f"Alternative method also failed: {e2}")
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Convert video to BVH using MediaPipe Pose.")
-    parser.add_argument("video_path", type=str, help="Path to the input video file.")
-    parser.add_argument("output_bvh_path", type=str, help="Path to save the output BVH file.")
+    parser.add_argument("--video", type=str, help="Path to the input video file.")
+    parser.add_argument("--output", type=str, help="Path to save the output BVH file.")
     parser.add_argument("--tpose_frame", type=int, default=0, help="Frame number for T-pose (0-indexed).")
     parser.add_argument("--model_path", type=str, default="pose_landmarker_full.task",
                         help="Path to MediaPipe Pose Landmarker model (.task).")
 
     args = parser.parse_args()
-    main(args.video_path, args.output_bvh_path, args.tpose_frame, args.model_path)
+    main(args.video, args.output, args.tpose_frame, args.model_path)
