@@ -577,8 +577,8 @@ def main():
     parser = argparse.ArgumentParser(description='Convert video to BVH using MediaPipe Pose')
     parser.add_argument('--video', required=True, help='Input video file')
     parser.add_argument('--output', required=True, help='Output BVH file')
-    vitpose_model = "./models/vitpose-b-multi-coco-256x192.pth"
-    yolo_model = "./models/yolov8l.pt"
+    vitpose_model = "model/vitpose-s-coco_25.pth"
+    yolo_model = "model/yolov8l.pt"
     args = parser.parse_args()
     
     # Initialize converter
