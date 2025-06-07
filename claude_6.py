@@ -200,9 +200,9 @@ class MathematicallyCorrectMP4ToBVH:
         ref_pose['RightHand'] = np.array([35.0, 35.0, 0.0])
         
         # Legs
-        ref_pose['LeftUpLeg'] = np.array([0.0, 0.0, 0.0])
-        ref_pose['LeftLeg'] = np.array([0.0, 0.0, 0.0])
-        ref_pose['LeftFoot'] = np.array([0.0, 0.0, 0.0])
+        ref_pose['LeftUpLeg'] = np.array([-5.0, -5.0, 0.0])
+        ref_pose['LeftLeg'] = np.array([-5.0, -25.0, 0.0])
+        ref_pose['LeftFoot'] = np.array([-5.0, -45.0, 0.0])
         
         ref_pose['RightUpLeg'] = np.array([5.0, -5.0, 0.0])
         ref_pose['RightLeg'] = np.array([5.0, -25.0, 0.0])
