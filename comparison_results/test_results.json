@@ -1,0 +1,218 @@
+[
+  {
+    "file": "bvh/walking_spine_fixed.bvh",
+    "score": 53.87029463708192,
+    "grade": "D",
+    "comparison": {
+      "duration_match": 0,
+      "frame_count_diff": 54,
+      "joint_count_match": true,
+      "speed_similarity": 61.610883911245764,
+      "generated_complete": true,
+      "reference_complete": true,
+      "overall_score": 53.87029463708192,
+      "generated_analysis": {
+        "frame_count": 96,
+        "duration_seconds": 7.999968000000001,
+        "joint_count": 19,
+        "total_displacement": 122.24110736267352,
+        "vertical_change": 0.0,
+        "average_speed": 15.280199541132353,
+        "expected_frames": 96,
+        "actual_motion_lines": 96,
+        "data_complete": true
+      },
+      "reference_analysis": {
+        "frame_count": 42,
+        "duration_seconds": 1.7500140000000002,
+        "joint_count": 19,
+        "total_displacement": 115.15300352747276,
+        "vertical_change": -0.42800900000000297,
+        "average_speed": 65.80118989189387,
+        "expected_frames": 42,
+        "actual_motion_lines": 42,
+        "data_complete": true
+      }
+    }
+  },
+  {
+    "file": "bvh/walking_00001.bvh",
+    "score": 50.02143895475037,
+    "grade": "D",
+    "comparison": {
+      "duration_match": 0,
+      "frame_count_diff": 54,
+      "joint_count_match": true,
+      "speed_similarity": 50.064316864251104,
+      "generated_complete": true,
+      "reference_complete": true,
+      "overall_score": 50.02143895475037,
+      "generated_analysis": {
+        "frame_count": 96,
+        "duration_seconds": 7.999968000000001,
+        "joint_count": 19,
+        "total_displacement": 0.6771374830933523,
+        "vertical_change": 0.0,
+        "average_speed": 0.08464252395676486,
+        "expected_frames": 96,
+        "actual_motion_lines": 96,
+        "data_complete": true
+      },
+      "reference_analysis": {
+        "frame_count": 42,
+        "duration_seconds": 1.7500140000000002,
+        "joint_count": 19,
+        "total_displacement": 115.15300352747276,
+        "vertical_change": -0.42800900000000297,
+        "average_speed": 65.80118989189387,
+        "expected_frames": 42,
+        "actual_motion_lines": 42,
+        "data_complete": true
+      }
+    }
+  },
+  {
+    "file": "bvh/thewave_spine_fixed.bvh",
+    "score": 50.38982009880772,
+    "grade": "D",
+    "comparison": {
+      "duration_match": 0,
+      "frame_count_diff": 40,
+      "joint_count_match": true,
+      "speed_similarity": 51.16946029642314,
+      "generated_complete": true,
+      "reference_complete": true,
+      "overall_score": 50.38982009880772,
+      "generated_analysis": {
+        "frame_count": 82,
+        "duration_seconds": 6.833306,
+        "joint_count": 19,
+        "total_displacement": 10.51671473455532,
+        "vertical_change": 0.0,
+        "average_speed": 1.5390375807193941,
+        "expected_frames": 82,
+        "actual_motion_lines": 82,
+        "data_complete": true
+      },
+      "reference_analysis": {
+        "frame_count": 42,
+        "duration_seconds": 1.7500140000000002,
+        "joint_count": 19,
+        "total_displacement": 115.15300352747276,
+        "vertical_change": -0.42800900000000297,
+        "average_speed": 65.80118989189387,
+        "expected_frames": 42,
+        "actual_motion_lines": 42,
+        "data_complete": true
+      }
+    }
+  },
+  {
+    "file": "bvh/boxer_spine_fixed.bvh",
+    "score": 50.245810957986414,
+    "grade": "D",
+    "comparison": {
+      "duration_match": 0,
+      "frame_count_diff": 54,
+      "joint_count_match": true,
+      "speed_similarity": 50.73743287395926,
+      "generated_complete": true,
+      "reference_complete": true,
+      "overall_score": 50.245810957986414,
+      "generated_analysis": {
+        "frame_count": 96,
+        "duration_seconds": 7.999968000000001,
+        "joint_count": 19,
+        "total_displacement": 7.76380263617211,
+        "vertical_change": 0.0,
+        "average_speed": 0.9704792114383594,
+        "expected_frames": 96,
+        "actual_motion_lines": 96,
+        "data_complete": true
+      },
+      "reference_analysis": {
+        "frame_count": 42,
+        "duration_seconds": 1.7500140000000002,
+        "joint_count": 19,
+        "total_displacement": 115.15300352747276,
+        "vertical_change": -0.42800900000000297,
+        "average_speed": 65.80118989189387,
+        "expected_frames": 42,
+        "actual_motion_lines": 42,
+        "data_complete": true
+      }
+    }
+  },
+  {
+    "file": "bvh/shrug.bvh",
+    "score": 50.29585534038299,
+    "grade": "D",
+    "comparison": {
+      "duration_match": 0,
+      "frame_count_diff": 38,
+      "joint_count_match": true,
+      "speed_similarity": 50.88756602114897,
+      "generated_complete": true,
+      "reference_complete": true,
+      "overall_score": 50.29585534038299,
+      "generated_analysis": {
+        "frame_count": 80,
+        "duration_seconds": 6.66664,
+        "joint_count": 19,
+        "total_displacement": 7.787022225015221,
+        "vertical_change": 0.0,
+        "average_speed": 1.168058005984307,
+        "expected_frames": 80,
+        "actual_motion_lines": 80,
+        "data_complete": true
+      },
+      "reference_analysis": {
+        "frame_count": 42,
+        "duration_seconds": 1.7500140000000002,
+        "joint_count": 19,
+        "total_displacement": 115.15300352747276,
+        "vertical_change": -0.42800900000000297,
+        "average_speed": 65.80118989189387,
+        "expected_frames": 42,
+        "actual_motion_lines": 42,
+        "data_complete": true
+      }
+    }
+  },
+  {
+    "file": "bvh/thewave.bvh",
+    "score": 50.38982009880772,
+    "grade": "D",
+    "comparison": {
+      "duration_match": 0,
+      "frame_count_diff": 40,
+      "joint_count_match": true,
+      "speed_similarity": 51.16946029642314,
+      "generated_complete": true,
+      "reference_complete": true,
+      "overall_score": 50.38982009880772,
+      "generated_analysis": {
+        "frame_count": 82,
+        "duration_seconds": 6.833306,
+        "joint_count": 19,
+        "total_displacement": 10.51671473455532,
+        "vertical_change": 0.0,
+        "average_speed": 1.5390375807193941,
+        "expected_frames": 82,
+        "actual_motion_lines": 82,
+        "data_complete": true
+      },
+      "reference_analysis": {
+        "frame_count": 42,
+        "duration_seconds": 1.7500140000000002,
+        "joint_count": 19,
+        "total_displacement": 115.15300352747276,
+        "vertical_change": -0.42800900000000297,
+        "average_speed": 65.80118989189387,
+        "expected_frames": 42,
+        "actual_motion_lines": 42,
+        "data_complete": true
+      }
+    }
+  }
+]

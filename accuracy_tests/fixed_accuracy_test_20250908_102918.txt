@@ -1,0 +1,58 @@
+FIXED BVH ACCURACY TEST REPORT
+============================================================
+
+Overall Accuracy Score: 63.4/100
+Frames Analyzed: 96/192
+
+JOINT ANGLE ACCURACY
+----------------------------------------
+Mean Angle Error: 46.61°
+Max Angle Error: 50.12°
+Angle Error Std Dev: 1.55°
+
+RELATIVE POSITION ACCURACY (Hip-Relative)
+----------------------------------------
+Mean Error: 28.665 units
+Max Error: 32.059 units
+
+BONE LENGTH CONSISTENCY
+----------------------------------------
+Mean Variation: 0.000 units
+Per-Bone Consistency Scores:
+  LeftShoulder_LeftArm: 100.0%
+  RightShoulder_RightArm: 100.0%
+  RightArm_RightForeArm: 100.0%
+  Hips_Spine: 100.0%
+  Spine_Chest: 100.0%
+
+MOTION CHARACTERISTICS
+----------------------------------------
+Motion Smoothness: 0.0/100
+Position Jitter: 79317.357
+Gait Cycle Correlation: 0.000
+Left-Right Symmetry: 49.6%
+
+WORST PERFORMING JOINTS (by angle error)
+----------------------------------------
+RightHand:
+  Angle Error: 0.00°
+  Position Error: 51.31 units
+RightForeArm:
+  Angle Error: 15.47°
+  Position Error: 50.97 units
+RightShoulder:
+  Angle Error: 0.00°
+  Position Error: 50.72 units
+RightArm:
+  Angle Error: 14.01°
+  Position Error: 47.52 units
+LeftForeArm:
+  Angle Error: 19.24°
+  Position Error: 28.31 units
+
+CONFIDENCE SCORES
+----------------------------------------
+angle_confidence: 100.0%
+position_confidence: 100.0%
+consistency_confidence: 100.0%
+temporal_confidence: 100.0%

@@ -1,0 +1,57 @@
+{
+  "total_frames": 192,
+  "valid_comparison_frames": 192,
+  "overall_accuracy_score": 30.63827240016199,
+  "mean_position_error": 34.680863799919,
+  "max_position_error": 50.81652416349974,
+  "position_error_std": 3.526979095475412,
+  "joint_position_errors": {
+    "Hips": 17.491395146442176,
+    "Spine": 17.491395146442176,
+    "Chest": 35.39357922331819,
+    "Neck": 35.39357922331819,
+    "Head": 67.46252928774771,
+    "LeftShoulder": 38.17344096419496,
+    "LeftArm": 32.40642195761427,
+    "LeftForeArm": 33.552284323162276,
+    "LeftHand": 32.589126012474146,
+    "RightShoulder": 40.93995238781852,
+    "RightArm": 28.798170093300953,
+    "RightForeArm": 34.90709157479499,
+    "RightHand": 36.252264058318424
+  },
+  "mean_rotation_error": 0.0,
+  "max_rotation_error": 0.0,
+  "rotation_error_std": 0.0,
+  "joint_rotation_errors": {},
+  "position_jitter_score": 3.526979095475412,
+  "rotation_jitter_score": 0.0,
+  "frame_alignment_score": 100.0,
+  "bone_length_error": 0.0,
+  "bone_length_variance": {},
+  "velocity_correlation": 0.0,
+  "acceleration_correlation": 0.0,
+  "worst_frames": [
+    6,
+    7,
+    185,
+    8,
+    186,
+    187,
+    188,
+    189,
+    190,
+    191
+  ],
+  "worst_joints": [
+    "Head",
+    "RightShoulder",
+    "LeftShoulder",
+    "RightHand",
+    "Chest"
+  ],
+  "error_patterns": {
+    "temporal_drift": 0.14266931963486576,
+    "periodic_error_frequency": 1.0
+  }
+}
