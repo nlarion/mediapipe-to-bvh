@@ -1,0 +1,52 @@
+IMPROVED BVH ACCURACY TEST REPORT
+============================================================
+
+Overall Accuracy Score: 65.1/100
+Frames Analyzed: 96/192
+
+STANDARD METRICS
+----------------------------------------
+Mean Angle Error: 60.18°
+Relative Position Error: 50.229 units
+Bone Length Consistency: 100.0%
+Motion Smoothness: 0.0/100
+Left-Right Symmetry: 92.1%
+Symmetry Naturalness: 75.0/100
+
+VISUAL QUALITY METRICS
+----------------------------------------
+Visual Naturalness: 95.0/100
+Temporal Drift: 97.9/100
+Over-smoothing Detection: 92.3/100
+Ground Contact Realism: 50.0/100
+Motion Dynamics: 93.7/100
+
+QUALITY WARNINGS
+----------------------------------------
+• Very high symmetry (>90%) - may be artificial
+
+WORST PERFORMING JOINTS
+----------------------------------------
+Head:
+  Angle Error: 0.00°
+  Position Error: 124.88 units
+Neck:
+  Angle Error: 71.82°
+  Position Error: 105.08 units
+Chest:
+  Angle Error: 80.63°
+  Position Error: 95.40 units
+LeftShoulder:
+  Angle Error: 0.00°
+  Position Error: 70.72 units
+RightShoulder:
+  Angle Error: 0.00°
+  Position Error: 49.98 units
+
+CONFIDENCE SCORES
+----------------------------------------
+angle_confidence: 100.0%
+position_confidence: 100.0%
+consistency_confidence: 100.0%
+temporal_confidence: 100.0%
+visual_confidence: 80.0%

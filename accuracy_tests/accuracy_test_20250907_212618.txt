@@ -1,0 +1,38 @@
+BVH ACCURACY TEST REPORT
+============================================================
+
+Overall Accuracy Score: 43.9/100
+Frames Analyzed: 192/192
+
+POSITION ACCURACY
+----------------------------------------
+Mean Error: 28.030 units
+Max Error: 30.152 units
+Std Dev: 1.181 units
+
+TEMPORAL COHERENCE
+----------------------------------------
+Position Jitter: 1.181
+Frame Alignment: 100.0%
+Velocity Correlation: 0.000
+
+STRUCTURAL CONSISTENCY
+----------------------------------------
+Bone Length Error: 0.000 units
+
+WORST PERFORMING JOINTS
+----------------------------------------
+RightShoulder: 50.601 units
+RightHand: 50.461 units
+RightForeArm: 50.106 units
+RightArm: 47.640 units
+LeftForeArm: 25.626 units
+
+WORST FRAMES
+----------------------------------------
+Frame indices: [61, 47, 53, 144, 52, 60, 51, 48, 50, 49]
+
+ERROR PATTERNS DETECTED
+----------------------------------------
+temporal_drift: 0.640
+periodic_error_frequency: 1.000
