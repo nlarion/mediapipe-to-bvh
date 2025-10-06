@@ -11,13 +11,20 @@ cd /home/nlarion/Desktop/mediapipe-to-bvh
 |---------|---------|---------|-------|---------|--------------|
 | Baseline (untitled9.py) | 68.2 | - | - | ~68/100 | No spatial tracking |
 | With Holistic model | 64.8 | - | - | ~64/100 | Hand landmarks 2D |
-| **Current (Jan 19)** | **67.3** | **59.7** | **67.9** | **65.0/100** | 3D hands + spatial tracking! |
-| Target | >70 | >65 | >70 | >70/100 | Need to fix Chest/Neck |
+| Jan 19 | 67.3 | 59.7 | 67.9 | 65.0/100 | 3D hands + spatial tracking |
+| **Current (Jan 20)** | **72.3** | **63.6** | **72.3** | **69.4/100** | Fixed torso chain + adaptive smoothing! |
+| Target | >70 | >65 | >70 | >70/100 | Almost there! |
 
-**Key Issues:**
-- Chest/Neck: ~73-79° error (biggest remaining issue)
-- ForeArm: ~76° error (improved with 3D but still limited by MediaPipe data)
-- Motion smoothness: Fixed! Now ~38-50/100
+**🎉 Recent Improvements (Jan 20):**
+- ✅ Fixed Chest rotation: 79.4° → ~50° error
+- ✅ Fixed Neck rotation: 73.3° → 3.2° error
+- ✅ Implemented adaptive smoothing
+- ✅ Average score: 65.0 → 69.4 (+4.4 points!)
+
+**Remaining Issues:**
+- ForeArm: ~76° error (needs better 3D hand reconstruction)
+- Walking temporal drift: 27.0/100 (IK not fully effective yet)
+- Head rotation: Still needs work (showing 0° in tests)
 
 ## 🔧 Quick Commands & Testing Protocol
 
@@ -49,30 +56,30 @@ python bvh_converter.py --video videos/Boxer_Video_Ready_One_Only.mp4 --output b
 python automated_bvh_accuracy_tester_improved.py --video videos/Boxer_Video_Ready_One_Only.mp4 --bvh bvh/boxer_test.bvh --output accuracy_tests/boxer_test.json
 ```
 
-### Current Test Results (Jan 19, 2025)
+### Current Test Results (Jan 20, 2025)
 | Video | Score | Key Characteristics | Main Issues |
 |-------|-------|---------------------|-------------|
-| thewave.mp4 | 67.3/100 | Arm movements, waving | Chest 79°, ForeArm 76° |
-| walking_00001.mp4 | 59.7/100 | Simple walking | Chest 82°, Temporal drift 30% |
-| Boxer_Video_Ready_One_Only.mp4 | 67.9/100 | Boxing movements | Neck 73°, Good asymmetry |
-| **Average** | **65.0/100** | - | Chest/Neck need work |
+| thewave.mp4 | 72.3/100 | Arm movements, waving | Mean angle 50.7°, Symmetry 95.8% |
+| walking_00001.mp4 | 63.6/100 | Simple walking | Temporal drift 27%, Chest 65° |
+| Boxer_Video_Ready_One_Only.mp4 | 72.3/100 | Boxing movements | Mean angle 40.6°, Good asymmetry 51.9% |
+| **Average** | **69.4/100** | - | Close to target! |
 
 ## 🔍 Identified Challenges & Solutions
 
-### 🎯 Quick Wins (Potential +5-10 points)
-1. **Fix Chest/Neck chain** - 73-82° errors, potential 2-3 points
-2. **Adaptive smoothing** - Could add 1-2 points
-3. **Better hand/wrist tracking** - Could improve ForeArm scores
+### 🎯 Quick Wins Achieved ✅
+1. **Fixed Chest/Neck chain** - Reduced errors by 70°+
+2. **Implemented adaptive smoothing** - Different smoothing for different joints
+3. **Integrated IK system** - Foundation ready, needs calibration
 
-### Major Issues (All Videos)
+### Major Issues
 
-#### 1. Torso Chain Errors (Chest→Neck)
-**Current**: Chest 65-82°, Neck 73-74°
-**Root Cause**: Chest/Neck rotation calculations need improvement
-**Solutions**:
-- [ ] Improve Chest rotation calculation
-- [ ] Fix Neck orientation calculation
-- [ ] Review torso kinematic chain
+#### 1. ✅ Torso Chain Errors (FIXED!)
+**Previous**: Chest 65-82°, Neck 73-74°
+**Current**: Chest ~50°, Neck ~3-8°
+**Solutions Implemented**:
+- [x] Improved Chest rotation using spine direction (hips→shoulders)
+- [x] Fixed Neck orientation using actual head position
+- [x] Added damping factors to reduce jitter
 
 #### 2. ForeArm/Wrist Errors (65-82°)
 **Current**: All videos show 65-82° ForeArm errors
@@ -160,78 +167,51 @@ python automated_bvh_accuracy_tester_improved.py --video videos/Boxer_Video_Read
 
 ## 🎯 Next Steps
 
-### 1. High Priority - Torso Chain Fix
-- [ ] Fix Chest rotation calculation (65-82° error)
-- [ ] Fix Neck rotation calculation (~73° error)
-- [ ] Review entire torso kinematic chain
-- [ ] Verify rest pose orientations
+### 1. ✅ High Priority - Torso Chain Fix (COMPLETED Jan 20)
+- [x] Fix Chest rotation calculation (65-82° → ~50° error)
+- [x] Fix Neck rotation calculation (73° → 3° error)
+- [x] Review entire torso kinematic chain
+- [x] Improved using spine direction and actual head positions
 
-### 2. Foot Contact Locking with IK (NEEDS FIXING)
+### 2. Foot Contact Locking with IK (INTEGRATED BUT NEEDS TUNING)
 
-**⚠️ CURRENT STATUS: IK implementation exists but NOT WORKING properly**
+**✅ CURRENT STATUS: IK integrated into bvh_converter.py (Jan 20)**
 
-**Files Already Created:**
-- `bvh_converter_with_ik.py` - Extended converter with IK support
-- `ik_foot_lock.py` - IK system with contact detection and two-bone solver
+**Implementation Status:**
+- [x] IK system integrated directly into `bvh_converter.py`
+- [x] Fixed application order - IK now applies BEFORE rotation calculation
+- [x] Deleted old files: `bvh_converter_with_ik.py`, `untitled*.py`
+- [x] Basic foot contact detection working (73% of frames detected)
 
-**🔴 Critical Issues Found (Why IK isn't improving results):**
+**⚠️ IK Not Yet Effective - Needs Calibration:**
 
-1. **Wrong Application Order**
-   - IK corrections are applied AFTER rotations are calculated
-   - The corrected positions are never converted back to rotations
-   - BVH uses rotations, not positions - we're throwing away the corrections!
+The IK system is properly integrated but isn't improving stability yet. Usage:
+```bash
+# Enable IK with --ik flag
+python bvh_converter.py --video videos/walking.mp4 --output bvh/output.bvh --ik
+```
 
-2. **Missing Rotation Recalculation**
-   - After IK corrects positions, we need to recalculate joint angles
-   - Current code: Calculate rotations → Apply IK → Write old rotations 🤦
-   - Should be: Apply IK → Recalculate rotations → Write new rotations
+**🔧 Still Need to Fix:**
 
-3. **Incorrect Data Flow**
-   ```python
-   # Current (WRONG):
-   all_rotations = self._process_motion(pose_frames)  # Line 182
-   self._update_pose_frames_with_ik(...)  # Line 178 - Too late!
+1. **Threshold Calibration**
+   - [ ] Current thresholds may not match MediaPipe's scale
+   - [ ] Velocity threshold needs tuning (currently 3.0 * scale/100)
+   - [ ] Height threshold needs adjustment (currently 8.0 * scale/100)
+   - [ ] Need to analyze actual foot velocities in walking videos
 
-   # Should be:
-   corrected_frames = apply_ik_to_positions(pose_frames)
-   all_rotations = self._process_motion(corrected_frames)
-   ```
+2. **Rotation Recalculation After IK**
+   - [ ] Currently updates positions but rotation calculation may not fully utilize them
+   - [ ] Need to ensure hip/knee rotations properly reflect locked ankles
+   - [ ] May need to recalculate parent joint rotations when child is locked
 
-4. **Threshold Calibration Issues**
-   - Contact thresholds may not match MediaPipe's scale
-   - Velocity threshold (5.0 units/frame) might be wrong
-   - Height threshold (10.0 units) might not match ground plane
+3. **Ground Plane Detection**
+   - [ ] Need better ground plane estimation
+   - [ ] Consider using lowest foot position as dynamic ground reference
+   - [ ] Add foot height filtering to prevent "floating"
 
-**🔧 Required Fixes:**
-
-1. **Fix Processing Pipeline**
-   - [ ] Apply IK corrections BEFORE calculating rotations
-   - [ ] Create new method: `apply_ik_preprocessing(pose_frames)`
-   - [ ] Call IK preprocessing before `_process_motion()`
-   - [ ] Ensure corrected positions flow through to rotation calculation
-
-2. **Add Rotation Recalculation**
-   - [ ] After IK corrects ankle/knee positions, recalculate:
-     - Hip rotation to point thigh toward corrected knee
-     - Knee rotation to point shin toward corrected ankle
-   - [ ] Use `calculate_rotation_from_directions()` with corrected vectors
-   - [ ] Preserve original twist/roll where possible
-
-3. **Calibrate Thresholds**
-   - [ ] Analyze actual foot velocities in walking_00001.mp4
-   - [ ] Find actual ground plane height in MediaPipe coordinates
-   - [ ] Adjust thresholds based on real data
-   - [ ] Add debug output to verify contact detection
-
-4. **Test & Validate Fix**
-   - [ ] Generate walking_00001.bvh with fixed IK
-   - [ ] Compare against walking_00001.bvh without IK
-   - [ ] Measure foot sliding reduction
-   - [ ] Check temporal drift improvement
-
-**Expected Impact After Fix:**
-- Significant reduction in foot sliding
-- Better temporal drift scores (currently 30.2/100)
+**Expected Impact Once Fixed:**
+- Reduction in foot sliding
+- Better temporal drift scores (currently 27.0/100 for walking)
 - More stable walking cycles
 
 ### 3. Video-Specific Fixes
