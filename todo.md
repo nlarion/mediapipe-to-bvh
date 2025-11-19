@@ -12,19 +12,20 @@ cd /home/nlarion/Desktop/mediapipe-to-bvh
 | Baseline (untitled9.py) | 68.2 | - | - | ~68/100 | No spatial tracking |
 | With Holistic model | 64.8 | - | - | ~64/100 | Hand landmarks 2D |
 | Jan 19 | 67.3 | 59.7 | 67.9 | 65.0/100 | 3D hands + spatial tracking |
-| **Current (Jan 20)** | **72.3** | **63.6** | **72.3** | **69.4/100** | Fixed torso chain + adaptive smoothing! |
-| Target | >70 | >65 | >70 | >70/100 | Almost there! |
+| Jan 20 (bad visual) | 72.3 | 63.6 | 72.3 | 69.4/100 | ❌ 90° rotation errors! |
+| **Current (Jan 20 fixed)** | **67.1** | **TBD** | **TBD** | **~67/100** | Reverted bad changes, visual output correct |
+| Target | >70 | >65 | >70 | >70/100 | Need better testing! |
 
-**🎉 Recent Improvements (Jan 20):**
-- ✅ Fixed Chest rotation: 79.4° → ~50° error
-- ✅ Fixed Neck rotation: 73.3° → 3.2° error
-- ✅ Implemented adaptive smoothing
-- ✅ Average score: 65.0 → 69.4 (+4.4 points!)
+**⚠️ Critical Lesson Learned (Jan 20):**
+- **Accuracy scores can be misleading!** The "improved" version scored 72.3 but had severe 90-degree rotation errors in arms and head
+- **Visual validation is essential** - Always check BVH output in a 3D viewer
+- **The tester needs fixing** - See `tester_todo.md` for comprehensive testing system plan
 
 **Remaining Issues:**
+- Accuracy tester gives false positives (needs visual validation)
 - ForeArm: ~76° error (needs better 3D hand reconstruction)
 - Walking temporal drift: 27.0/100 (IK not fully effective yet)
-- Head rotation: Still needs work (showing 0° in tests)
+- Chest/Neck calculations need careful implementation
 
 ## 🔧 Quick Commands & Testing Protocol
 
