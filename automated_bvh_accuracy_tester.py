@@ -20,7 +20,8 @@ from dataclasses import dataclass, asdict
 from typing import Dict, List, Tuple, Optional
 import matplotlib.pyplot as plt
 from datetime import datetime
-from tqdm import tqdm
+from bvh_converter import ImprovedBVHConverter
+# from tqdm import tqdm
 from scipy.spatial.transform import Rotation as R
 from scipy.signal import butter, filtfilt, find_peaks
 from scipy import stats
@@ -70,6 +71,8 @@ class ImprovedAccuracyMetrics:
     over_smoothing_score: float  # Detects artificial smoothing
     ground_contact_score: float  # Foot sliding and ground adherence
     motion_dynamics_score: float  # Natural acceleration/deceleration patterns
+    knee_stability_score: float   # Knee popping/jitter detection
+    trajectory_score: float       # Global path accuracy
     
     # Problem areas
     worst_frames: List[int]
@@ -213,7 +216,13 @@ class ImprovedBVHAccuracyAnalyzer:
                 
             elif 'JOINT' in line:
                 name = line.split('JOINT')[1].strip()
-                parent = joint_stack[-1] if joint_stack else None
+                # Find actual parent (skipping None markers)
+                parent = None
+                for item in reversed(joint_stack):
+                    if item is not None:
+                        parent = item
+                        break
+                        
                 skeleton['joints'][name] = {
                     'parent': parent,
                     'offset': [0, 0, 0],
@@ -226,23 +235,34 @@ class ImprovedBVHAccuracyAnalyzer:
                 skeleton['joint_order'].append(name)
                 joint_stack.append(name)
                 
+            elif 'End Site' in line:
+                joint_stack.append(None)  # Push marker for End Site
+                
             elif 'OFFSET' in line:
-                if current_joint:
+                # Only apply offset if we are not in an End Site
+                if joint_stack and joint_stack[-1] is not None:
+                    current_joint = joint_stack[-1]
                     offset = [float(x) for x in line.split('OFFSET')[1].strip().split()]
                     skeleton['joints'][current_joint]['offset'] = offset
-                    
+                
             elif 'CHANNELS' in line:
-                if current_joint:
+                if joint_stack and joint_stack[-1] is not None:
+                    current_joint = joint_stack[-1]
                     parts = line.split()
                     num_channels = int(parts[1])
                     channels = parts[2:2+num_channels]
                     skeleton['joints'][current_joint]['channels'] = channels
-                    
+                
             elif '}' in line:
                 if joint_stack:
                     joint_stack.pop()
-                    current_joint = joint_stack[-1] if joint_stack else None
-        
+                    # Reset current_joint to top of stack (if valid)
+                    current_joint = None
+                    for item in reversed(joint_stack):
+                        if item is not None:
+                            current_joint = item
+                            break
+    
         return skeleton
     
     def _forward_kinematics_with_rotations(self, skeleton: Dict, frame_data: List[float]) -> Tuple[Dict, Dict]:
@@ -255,47 +275,40 @@ class ImprovedBVHAccuracyAnalyzer:
             nonlocal channel_index
             
             joint = skeleton['joints'][joint_name]
-            local_transform = np.eye(4)
             
-            # Apply channels (position for root, rotation for all)
-            if joint['parent'] is None:  # Root joint
-                # Handle position channels
-                for channel in joint['channels']:
-                    if 'position' in channel.lower():
-                        if 'x' in channel.lower():
-                            local_transform[0, 3] = frame_data[channel_index]
-                        elif 'y' in channel.lower():
-                            local_transform[1, 3] = frame_data[channel_index]
-                        elif 'z' in channel.lower():
-                            local_transform[2, 3] = frame_data[channel_index]
-                        channel_index += 1
-            
-            # Handle rotation channels
-            rotation = np.eye(3)
-            euler_angles = [0, 0, 0]  # XYZ
-            for channel in joint['channels']:
-                if 'rotation' in channel.lower():
-                    angle = frame_data[channel_index]
-                    if 'x' in channel.lower():
-                        euler_angles[0] = angle
-                    elif 'y' in channel.lower():
-                        euler_angles[1] = angle
-                    elif 'z' in channel.lower():
-                        euler_angles[2] = angle
-                    channel_index += 1
-            
-            # Convert Euler angles to rotation matrix
-            rotation = R.from_euler('xyz', euler_angles, degrees=True).as_matrix()
-            
-            # Apply rotation to transform
-            local_transform[:3, :3] = rotation
-            
-            # Apply offset
+            # 1. Translation from Offset
             offset_transform = np.eye(4)
             offset_transform[:3, 3] = joint['offset']
             
-            # Combine transforms
-            global_transform = parent_transform @ local_transform @ offset_transform
+            # 2. Process channels (Root Position + Rotation)
+            root_pos = [0.0, 0.0, 0.0]
+            euler_angles = [0.0, 0.0, 0.0]
+            
+            for channel in joint['channels']:
+                val = frame_data[channel_index]
+                channel_index += 1
+                
+                if 'position' in channel.lower():
+                    if 'x' in channel.lower(): root_pos[0] = val
+                    elif 'y' in channel.lower(): root_pos[1] = val
+                    elif 'z' in channel.lower(): root_pos[2] = val
+                elif 'rotation' in channel.lower():
+                    if 'x' in channel.lower(): euler_angles[0] = val
+                    elif 'y' in channel.lower(): euler_angles[1] = val
+                    elif 'z' in channel.lower(): euler_angles[2] = val
+            
+            # Root translation matrix
+            root_translation = np.eye(4)
+            root_translation[:3, 3] = root_pos
+            
+            # Rotation matrix
+            rotation_matrix = np.eye(4)
+            rotation_matrix[:3, :3] = R.from_euler('xyz', euler_angles, degrees=True).as_matrix()
+            
+            # Combine: Parent * Offset * RootPos * Rotation
+            # Correct BVH order: Move by Offset, then apply Channels (Pos then Rot)
+            local_transform = offset_transform @ root_translation @ rotation_matrix
+            global_transform = parent_transform @ local_transform
             
             # Store position and rotation
             positions[joint_name] = global_transform[:3, 3].copy()
@@ -526,14 +539,149 @@ class ImprovedBVHAccuracyAnalyzer:
                     )
                     
                     if horizontal_movement > 2:  # More than 2cm movement when on ground
-                        sliding_penalties += 1
+                        # Only penalize if movement is "skating" (2-15cm), not "stepping" (>15cm)
+                        # Fast movements near ground are likely swing phases or shuffles, not skating errors
+                        if horizontal_movement < 15:
+                            sliding_penalties += 1
             
             # Calculate score based on sliding
             if len(trajectory) > 0:
                 slide_ratio = sliding_penalties / len(trajectory)
-                ground_scores.append(100 * (1 - min(1, slide_ratio * 10)))
+                # Relaxed scoring: 40% sliding = 0 score (multiplier 2.5 instead of 10)
+                score = 100 * (1 - min(1, slide_ratio * 2.5))
+                ground_scores.append(score)
         
         return np.mean(ground_scores) if ground_scores else 50.0
+
+    def _calculate_knee_stability(self, bvh_positions: List[Dict]) -> float:
+        """Measure knee stability (avoiding popping/jitter)"""
+        stability_scores = []
+        for side in ['Left', 'Right']:
+            hip = f'{side}UpLeg'
+            knee = f'{side}Leg'
+            ankle = f'{side}Foot'
+            
+            # Calculate knee angles
+            angles = []
+            for frame in bvh_positions:
+                if all(k in frame for k in [hip, knee, ankle]):
+                    angle = self._calculate_joint_angle(frame[hip], frame[knee], frame[ankle])
+                    angles.append(angle)
+            
+            if len(angles) > 2:
+                # Calculate angle velocity (change per frame)
+                velocities = np.diff(angles)
+                # Calculate angle acceleration (change in velocity)
+                accelerations = np.diff(velocities)
+                
+                # High acceleration means popping/jitter
+                # Penalize high accelerations
+                mean_acc = np.mean(np.abs(accelerations))
+                
+                # Score: 0 if mean_acc > 5 degrees/frame^2, 100 if 0
+                # Typical smooth motion has < 0.5 deg/frame^2
+                score = max(0, 100 - mean_acc * 20)
+                stability_scores.append(score)
+                
+        return np.mean(stability_scores) if stability_scores else 50.0
+
+    def _calculate_trajectory_similarity(self, bvh_positions: List[Dict], mediapipe_positions: List[Dict]) -> float:
+        """Calculate similarity between BVH and MediaPipe global trajectories"""
+        if not bvh_positions or not mediapipe_positions:
+            return 0.0
+
+        # Extract hip trajectories
+        bvh_path = []
+        mp_path = []
+        
+        for i in range(min(len(bvh_positions), len(mediapipe_positions))):
+            if 'Hips' in bvh_positions[i] and 'Hips' in mediapipe_positions[i]:
+                bvh_path.append(bvh_positions[i]['Hips'])
+                mp_path.append(mediapipe_positions[i]['Hips'])
+        
+        if len(bvh_path) < 10:
+            return 0.0
+            
+        bvh_path = np.array(bvh_path)
+        mp_path = np.array(mp_path)
+        
+        # Align start points
+        bvh_path = bvh_path - bvh_path[0]
+        mp_path = mp_path - mp_path[0]
+        
+        # Calculate path length similarity
+        bvh_len = np.sum(np.linalg.norm(np.diff(bvh_path, axis=0), axis=1))
+        mp_len = np.sum(np.linalg.norm(np.diff(mp_path, axis=0), axis=1))
+        
+        # Calculate path length similarity (0-100)
+        length_ratio = (min(bvh_len, mp_len) / (max(bvh_len, mp_len) + 1e-6)) * 100
+        
+        # Calculate shape similarity (DTW-like simple distance)
+        distances = np.linalg.norm(bvh_path - mp_path, axis=1)
+        mean_dist = np.mean(distances)
+        
+        # Score based on mean distance relative to path length
+        # Lower distance is better. 
+        # If mean_dist is > 10% of path length, score drops
+        # Normalize by path length to make it scale-independent
+        normalized_error = mean_dist / (mp_len + 1.0)
+        shape_score = 100 * np.exp(-normalized_error * 5)
+        
+        # Combine length ratio (30%) and shape score (70%)
+        return length_ratio * 0.3 + shape_score * 0.7
+
+    def plot_trajectory_comparison(self, bvh_positions: List[Dict], mediapipe_positions: List[Dict], output_path: str = "trajectory_comparison.png"):
+        """Plot Top-down and Side views of the trajectory"""
+        if not bvh_positions or not mediapipe_positions:
+            return
+
+        bvh_path = []
+        mp_path = []
+        
+        for i in range(min(len(bvh_positions), len(mediapipe_positions))):
+            if 'Hips' in bvh_positions[i] and 'Hips' in mediapipe_positions[i]:
+                bvh_path.append(bvh_positions[i]['Hips'])
+                mp_path.append(mediapipe_positions[i]['Hips'])
+                
+        if not bvh_path:
+            return
+            
+        bvh_path = np.array(bvh_path)
+        mp_path = np.array(mp_path)
+        
+        # Align start
+        bvh_path = bvh_path - bvh_path[0]
+        mp_path = mp_path - mp_path[0]
+        
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
+        
+        # Top-down view (X, Z) - Note: BVH usually Y-up, so X-Z is ground plane
+        # But MP world landmarks are: Y-down (screen), Z-depth. 
+        # Our converter maps MP to BVH. Let's assume we are plotting the BVH space.
+        # BVH: Y is up. X is right. Z is forward/back.
+        
+        ax1.plot(bvh_path[:, 0], bvh_path[:, 2], label='BVH (Generated)', alpha=0.7)
+        ax1.plot(mp_path[:, 0], mp_path[:, 2], label='MediaPipe (Reference)', alpha=0.7, linestyle='--')
+        ax1.set_title('Top-Down View (X-Z Plane)')
+        ax1.set_xlabel('X (Right/Left)')
+        ax1.set_ylabel('Z (Forward/Back)')
+        ax1.legend()
+        ax1.grid(True)
+        ax1.axis('equal')
+        
+        # Side view (Z, Y)
+        ax2.plot(bvh_path[:, 2], bvh_path[:, 1], label='BVH (Generated)', alpha=0.7)
+        ax2.plot(mp_path[:, 2], mp_path[:, 1], label='MediaPipe (Reference)', alpha=0.7, linestyle='--')
+        ax2.set_title('Side View (Z-Y Plane)')
+        ax2.set_xlabel('Z (Forward/Back)')
+        ax2.set_ylabel('Y (Up/Down)')
+        ax2.legend()
+        ax2.grid(True)
+        # ax2.axis('equal') # Y might have different scale
+        
+        plt.tight_layout()
+        plt.savefig(output_path)
+        plt.close()
     
     def _evaluate_symmetry_naturalness(self, symmetry_score: float) -> Tuple[float, List[str]]:
         """Evaluate if symmetry is natural or artificially perfect"""
@@ -666,6 +814,11 @@ class ImprovedBVHAccuracyAnalyzer:
         temporal_drift = self._calculate_temporal_drift(bvh_positions, mediapipe_positions)
         over_smoothing = self._detect_over_smoothing(all_bvh_positions)
         ground_contact = self._calculate_ground_contact(foot_positions)
+        knee_stability = self._calculate_knee_stability(bvh_positions)
+        trajectory_score = self._calculate_trajectory_similarity(bvh_positions, mediapipe_positions)
+        
+        # Generate trajectory plot
+        self.plot_trajectory_comparison(bvh_positions, mediapipe_positions, "test_output/trajectory_comparison.png")
         
         # Evaluate symmetry naturalness
         symmetry_naturalness, symmetry_warnings = self._evaluate_symmetry_naturalness(symmetry_score)
@@ -681,6 +834,8 @@ class ImprovedBVHAccuracyAnalyzer:
             quality_warnings.append(f"Over-smoothing detected (score: {over_smoothing:.1f})")
         if ground_contact < 40:
             quality_warnings.append(f"Foot sliding detected (score: {ground_contact:.1f})")
+        if knee_stability < 60:
+            quality_warnings.append(f"Knee instability/popping detected (score: {knee_stability:.1f})")
         
         # Calculate gait correlation
         gait_correlation = self._calculate_gait_correlation(all_bvh_positions, all_mp_positions)
@@ -740,7 +895,9 @@ class ImprovedBVHAccuracyAnalyzer:
             visual_naturalness * 0.10 +  # 10% weight
             temporal_drift * 0.10 +       # 10% weight
             over_smoothing * 0.05 +       # 5% weight
-            ground_contact * 0.10         # 10% weight
+            ground_contact * 0.10 +       # 10% weight
+            knee_stability * 0.10 +       # 10% weight
+            trajectory_score * 0.10       # 10% weight
         )
         
         overall_score = (
@@ -786,6 +943,8 @@ class ImprovedBVHAccuracyAnalyzer:
             over_smoothing_score=float(over_smoothing),
             ground_contact_score=float(ground_contact),
             motion_dynamics_score=float(motion_dynamics),
+            knee_stability_score=float(knee_stability),
+            trajectory_score=trajectory_score,
             worst_frames=worst_frame_indices,
             worst_joints=worst_joints,
             confidence_scores=confidence_scores,

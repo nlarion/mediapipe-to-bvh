@@ -474,3 +474,25 @@ def apply_ik_constraint(joint_pos: np.ndarray,
     # Calculate new joint position
     # This is simplified - proper IK would adjust the entire chain
     return child_pos - vec2_rotated
+
+
+def calculate_depth_from_projected_length(observed_length: float, 
+                                        actual_length: float, 
+                                        focal_length: float) -> float:
+    """Calculate depth (Z-distance) based on projected length of a known object.
+    
+    Uses similar triangles principle:
+    depth = (actual_length * focal_length) / observed_length
+    
+    Args:
+        observed_length: Length of object in the image (pixels or normalized units)
+        actual_length: Actual physical length of the object
+        focal_length: Focal length of the camera (in same units as observed_length)
+        
+    Returns:
+        Calculated depth
+    """
+    if observed_length < 1e-6:
+        return 0.0
+        
+    return (actual_length * focal_length) / observed_length

@@ -38,10 +38,12 @@ class IKChainConfig:
     foot_height_offset: float  # Ground plane offset
 
     # Thresholds from reference BVH analysis
-    contact_velocity_threshold: float = 5.0  # units/frame (adjustable)
-    contact_height_threshold: float = 10.0   # units from ground
+    # Increased velocity threshold to tolerate MediaPipe noise
+    contact_velocity_threshold: float = 8.0  # units/frame (adjustable)
+    contact_height_threshold: float = 12.0   # units from ground
     foot_clearance_height: float = 5.0       # Expected foot clearance when walking
     sliding_threshold: float = 2.0           # Maximum allowed sliding distance
+    vertical_velocity_threshold: float = 2.0 # Max vertical velocity for planted foot
 
 
 class FootContactDetector:
@@ -62,7 +64,8 @@ class FootContactDetector:
         foot_position: np.ndarray,
         foot_velocity: np.ndarray,
         frame_index: int,
-        foot_side: str = 'left'
+        foot_side: str = 'left',
+        external_contact: Optional[bool] = None
     ) -> FootContact:
         """
         Detect foot contact state based on position and velocity.
@@ -72,26 +75,41 @@ class FootContactDetector:
             foot_velocity: 3D velocity of foot
             frame_index: Current frame number
             foot_side: 'left' or 'right'
-
+            external_contact: Optional override from external detector
+        
         Returns:
             FootContact object with state and confidence
         """
         # Calculate velocity magnitude
         velocity_mag = np.linalg.norm(foot_velocity)
+        vertical_velocity = abs(foot_velocity[1])
 
         # Get foot height (Y component)
         foot_height = foot_position[1]
 
         # Check thresholds
         is_low_velocity = velocity_mag < self.config.contact_velocity_threshold
+        is_low_vertical_velocity = vertical_velocity < self.config.vertical_velocity_threshold
         is_near_ground = foot_height < self.config.contact_height_threshold
 
         # Calculate base confidence from velocity and height
-        velocity_confidence = max(0, 1.0 - velocity_mag / (self.config.contact_velocity_threshold * 2))
-        height_confidence = max(0, 1.0 - foot_height / (self.config.contact_height_threshold * 2))
+        # Velocity confidence: Higher is better (lower velocity)
+        velocity_confidence = max(0, 1.0 - velocity_mag / (self.config.contact_velocity_threshold * 1.5))
+        
+        # Height confidence: Higher is better (lower height)
+        height_confidence = max(0, 1.0 - foot_height / (self.config.contact_height_threshold * 1.5))
+        
+        # Vertical velocity confidence: Planted feet shouldn't move up/down much
+        vert_vel_confidence = max(0, 1.0 - vertical_velocity / (self.config.vertical_velocity_threshold * 2.0))
 
-        # Combined confidence
-        base_confidence = (velocity_confidence * 0.6 + height_confidence * 0.4)
+        # Combined confidence - Weighted sum
+        # Height is the strongest indicator for "can be planted"
+        # Velocity is the strongest indicator for "is planted"
+        base_confidence = (
+            velocity_confidence * 0.4 + 
+            height_confidence * 0.4 + 
+            vert_vel_confidence * 0.2
+        )
 
         # Apply hysteresis using history
         history = self.contact_history[foot_side]
@@ -101,16 +119,28 @@ class FootContactDetector:
             # Check for consistent states
             if all(s == FootState.PLANTED for s in recent_states):
                 # Bias toward staying planted
-                base_confidence = min(1.0, base_confidence * 1.2)
+                base_confidence = min(1.0, base_confidence * 1.3)
             elif all(s == FootState.SWING for s in recent_states):
                 # Bias toward staying in swing
                 base_confidence = max(0.0, base_confidence * 0.8)
 
         # Determine state based on confidence
-        if base_confidence > 0.7 and is_low_velocity and is_near_ground:
+        # Stricter requirements for entering PLANTED state
+        
+        # Check external override first
+        if external_contact is True:
+            state = FootState.PLANTED
+            confidence = 1.0
+            # Force update base confidence for history consistency
+            base_confidence = 1.0
+        elif external_contact is False:
+            state = FootState.SWING
+            confidence = 1.0
+            base_confidence = 0.0
+        elif base_confidence > 0.65 and is_low_velocity and is_near_ground:
             state = FootState.PLANTED
             confidence = base_confidence
-        elif base_confidence < 0.3 or not is_near_ground:
+        elif base_confidence < 0.35 or not is_near_ground:
             state = FootState.SWING
             confidence = 1.0 - base_confidence
         else:
@@ -118,10 +148,19 @@ class FootContactDetector:
             confidence = 0.5
 
         # Create contact info
+        # If we are planted and were planted previously, keep the original planted position
+        # This prevents the "locked" position from drifting with the sliding input
+        final_position = foot_position.copy()
+        
+        if state == FootState.PLANTED and len(history) > 0:
+            last_contact = history[-1]
+            if last_contact.state == FootState.PLANTED:
+                final_position = last_contact.position.copy()
+
         contact = FootContact(
             state=state,
             confidence=confidence,
-            position=foot_position.copy(),
+            position=final_position,
             frame_index=frame_index,
             velocity=velocity_mag,
             height=foot_height
@@ -280,7 +319,8 @@ class IKFootLockSystem:
         knee_positions: Dict[str, np.ndarray],
         ankle_positions: Dict[str, np.ndarray],
         frame_index: int,
-        previous_ankle_positions: Optional[Dict[str, np.ndarray]] = None
+        previous_ankle_positions: Optional[Dict[str, np.ndarray]] = None,
+        contact_overrides: Optional[Dict[str, bool]] = None
     ) -> Dict[str, Dict[str, np.ndarray]]:
         """
         Process a single frame with IK foot locking.
@@ -291,6 +331,7 @@ class IKFootLockSystem:
             ankle_positions: Original ankle positions from tracking
             frame_index: Current frame number
             previous_ankle_positions: Ankle positions from previous frame
+            contact_overrides: Optional dictionary of contact overrides ('left', 'right')
 
         Returns:
             Dictionary with corrected positions for each side
@@ -306,11 +347,17 @@ class IKFootLockSystem:
 
             # Detect foot contact
             detector = self.left_detector if side == 'left' else self.right_detector
+            
+            external_contact = None
+            if contact_overrides and side in contact_overrides:
+                external_contact = contact_overrides[side]
+                
             contact = detector.detect_contact(
                 ankle_positions[side],
                 velocity,
                 frame_index,
-                side
+                side,
+                external_contact
             )
 
             # Apply IK if foot is planted

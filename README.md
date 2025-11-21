@@ -1,94 +1,63 @@
 # MediaPipe to BVH Converter
 
-Convert videos to BVH (Biovision Hierarchy) motion capture files using pose estimation.
+Convert videos to BVH (Biovision Hierarchy) motion capture files using MediaPipe pose estimation.
 
-## Main Implementations
+## Main Scripts
 
-### 1. **mediapipe_bvh_plotly.ipynb** (Recommended)
-- **Best working implementation** with interactive Plotly 3D preview
-- MediaPipe-based pose detection
-- Real-time visualization of BVH output
-- Includes both BVH parsing and generation functions
+### 1. **bvh_converter.py**
+- **Main Converter Script**
+- Uses MediaPipe to extract pose landmarks.
+- Converts landmarks to BVH motion data.
+- Includes IK (Inverse Kinematics) for better foot locking and ground contact.
+- **Usage:**
+  ```python
+  from bvh_converter import ImprovedBVHConverter
+  
+  converter = ImprovedBVHConverter(enable_ik=True)
+  converter.convert(pose_frames, "output.bvh")
+  ```
 
-### 2. **mediapipe_to_bvh_complete.py**
-- Comprehensive command-line MediaPipe implementation
-- Global position tracking and motion smoothing
-- Supports video preview during processing
-- Most feature-complete standalone script
+### 2. **automated_bvh_accuracy_tester.py**
+- **Accuracy Analysis**
+- Compares generated BVH motion against the original MediaPipe landmarks.
+- Calculates metrics for:
+  - Overall Accuracy
+  - Visual Naturalness
+  - Foot Skate / Ground Contact
+  - Knee Stability
+  - Temporal Drift
+
+### 3. **verify_improvements.py**
+- **Verification Script**
+- Runs the full pipeline: Video -> Extraction -> Conversion -> Analysis.
+- Useful for verifying that changes to the converter haven't regressed quality.
+- **Usage:**
+  ```bash
+  python verify_improvements.py
+  ```
+
+## Installation
+
 ```bash
-python mediapipe_to_bvh_complete.py --video input.mp4 --output output.bvh --preview
+# Activate the virtual environment
+source /home/nlarion/Desktop/motion/motion_env/bin/activate
+
+# Install dependencies
+pip install -r requirements.txt
 ```
-
-### 3. **multi_backend_bvh.py**
-- Supports multiple pose estimation backends:
-  - ViTPose (most accurate)
-  - MMPose
-  - MediaPipe (fallback)
-- Automatically selects best available backend
-- Good for comparing different pose estimation methods
-
-### 4. **vitpose_math_bvh.py**
-- Mathematical approach using ViTPose
-- Uses bvhio library for proper BVH handling
-- Advanced 3D pose lifting techniques
-- Best for high-accuracy requirements
 
 ## Directory Structure
 
 ```
 mediapipe-to-bvh/
-├── mediapipe_bvh_plotly.ipynb    # Main notebook with Plotly preview
-├── mediapipe_to_bvh_complete.py  # Complete CLI implementation
-├── multi_backend_bvh.py          # Multi-backend support
-├── vitpose_math_bvh.py           # Mathematical approach
-├── requirements.txt              # Python dependencies
-├── model/                        # Pose detection models
-│   ├── pose_landmarker_*.task   # MediaPipe models
-│   └── vitpose-*.pth            # ViTPose models
-├── videos/                       # Input video files
-├── bvh/                         # Output BVH files
-└── easy_ViTPose/                # ViTPose implementation
-
+├── bvh_converter.py                 # Main converter logic
+├── automated_bvh_accuracy_tester.py # Accuracy analysis
+├── verify_improvements.py           # End-to-end verification script
+├── mediapipe_extractor.py           # MediaPipe interaction
+├── skeleton_mapper.py               # Mapping MP landmarks to BVH skeleton
+├── ik_foot_lock.py                  # Inverse Kinematics for feet
+├── math_utils.py                    # Geometry/Math helpers
+├── videos/                          # Input video files
+├── bvh/                             # Output BVH files
+└── test_output/                     # Generated test files
 ```
-
-## Installation
-
-```bash
-pip install -r requirements.txt
-```
-
-## Usage
-
-### Notebook (Recommended for visualization)
-1. Open `mediapipe_bvh_plotly.ipynb` in Jupyter
-2. Run the cells to process videos and preview BVH output in 3D
-
-### Command Line
-```bash
-# Basic conversion
-python mediapipe_to_bvh_complete.py --video videos/walking.mp4 --output bvh/walking.bvh
-
-# With preview window
-python mediapipe_to_bvh_complete.py --video videos/walking.mp4 --output bvh/walking.bvh --preview
-
-# Using multi-backend (auto-selects best available)
-python multi_backend_bvh.py --input videos/walking.mp4 --output bvh/walking.bvh
-```
-
-## Features
-
-- **MediaPipe Integration**: Reliable human pose detection
-- **ViTPose Support**: State-of-the-art pose estimation
-- **Plotly 3D Visualization**: Interactive preview of BVH animations
-- **Multiple Backends**: Choose between different pose estimation methods
-- **Motion Smoothing**: Temporal filtering for smoother animations
-- **Global Position Tracking**: Maintains character movement in world space
-
-## Requirements
-
-- Python 3.7+
-- OpenCV
-- MediaPipe
-- NumPy
-- Plotly (for visualization)
-- PyTorch (for ViTPose backend)

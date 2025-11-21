@@ -17,7 +17,8 @@ MEDIAPIPE_CONFIG = {
 PROCESSING_CONFIG = {
     'sample_rate': 2,  # Process every 2nd frame (key to reducing drift)
     'scale_factor': 100.0,  # Convert meters to centimeters
-    'movement_scale': 90000.0,  # Reduced from 100000 to reduce jitter while maintaining movement
+    'movement_scale': 0.01,      # Scale factor for root movement
+    'depth_scale_multiplier': 1.0, # Multiplier for Z-axis movement (depth)
     'min_bone_length': 1.0,  # Minimum bone length in cm
     'confidence_threshold': 0.5
 }
