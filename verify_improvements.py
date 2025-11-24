@@ -13,7 +13,7 @@ from mediapipe_extractor import MediaPipeExtractor
 
 def verify():
     test_videos = [
-        "walking_00002.mp4"
+        "fighter_001.mp4"
     ]
     
     results = []

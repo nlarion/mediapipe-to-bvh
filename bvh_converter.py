@@ -86,15 +86,16 @@ class ImprovedBVHConverter:
             # This populates self.foot_contact_frames
             self._apply_improved_ik_corrections(all_leg_positions)
 
-        # Calculate hip positions with drift correction (using contacts from Pass 1)
-        print("Calculating hip movement with drift correction...")
-        hip_positions = self._calculate_hip_positions_with_drift_correction(pose_frames)
-
-        # Update pose_frames with new hips (and shift upper body)
+        # 4. Calculate hip positions (root) with drift correction
+        # This is done AFTER IK to ensure we have stable foot contacts for drift correction
+        print("Calculating root motion from foot lock...")
+        hip_positions = self._calculate_root_motion_from_feet(pose_frames)
+        
+        # 5. Update pose frames with corrected hip positions
         print("Updating pose frames with corrected hip positions...")
-        self._update_pose_frames_with_new_hips(pose_frames, hip_positions)
-
-        # PASS 2: Run IK with new hips to get final leg positions
+        for i, frame in enumerate(pose_frames):
+            if i < len(hip_positions):
+                frame.hip_position = hip_positions[i]
         if self.enable_ik:
             print("Extracting leg positions for IK processing (Pass 2)...")
             all_leg_positions = []
@@ -191,17 +192,17 @@ class ImprovedBVHConverter:
         
         # Velocity threshold: Increased to tolerate noise
         # 2.0 * (scale/100) -> ~2.0 units/frame if scale is 100
-        self.ik_system.config.contact_velocity_threshold = 2.5 * (scale / 100.0)
+        self.ik_system.config.contact_velocity_threshold = 4.0 * (scale / 100.0)
 
         # Height threshold: Increased to catch feet earlier
         # 0.08 * scale -> 8cm if scale is 100
-        self.ik_system.config.contact_height_threshold = 0.08 * scale
+        self.ik_system.config.contact_height_threshold = 0.12 * scale
 
         # Foot clearance: minimum height for foot to be considered off ground
-        self.ik_system.config.foot_clearance_height = 0.04 * scale
+        self.ik_system.config.foot_clearance_height = 0.05 * scale
         
         # Vertical velocity threshold (NEW)
-        self.ik_system.config.vertical_velocity_threshold = 1.0 * (scale / 100.0)
+        self.ik_system.config.vertical_velocity_threshold = 2.0 * (scale / 100.0)
 
         print(f"Calibrated IK thresholds:")
         print(f"  Velocity threshold: {self.ik_system.config.contact_velocity_threshold:.3f}")
@@ -656,9 +657,9 @@ class ImprovedBVHConverter:
                         )
 
                         # More natural wrist constraints
-                        euler_angles[0] *= 0.85  # Good flexion/extension range
-                        euler_angles[1] *= 0.5   # Limited radial/ulnar deviation
-                        euler_angles[2] *= 0.6   # Moderate pronation/supination
+                        euler_angles[0] *= 0.9   # Good flexion/extension range
+                        euler_angles[1] *= 0.7   # Limited radial/ulnar deviation
+                        euler_angles[2] *= 0.8   # Moderate pronation/supination
 
                         calculated_euler = euler_angles
                         is_global = True
@@ -828,131 +829,175 @@ class ImprovedBVHConverter:
             # Fallback to simple direction if calculation fails
             return None
 
-    def _calculate_hip_positions_with_drift_correction(self, pose_frames: List[PoseFrame]) -> List[np.ndarray]:
-        """Calculate hip positions with physics-based depth correction."""
+    def _calculate_root_motion_from_feet(self, pose_frames: List[PoseFrame]) -> List[np.ndarray]:
+        """
+        Calculate root motion by tracking planted feet.
+        When a foot is planted, the root moves in the opposite direction of the foot's relative movement.
+        """
         positions = []
         
-        # Get skeleton leg lengths for depth calculation
-        # We use the reference frame (first valid frame) to get actual bone lengths
-        ref_idx = 0
-        for i, frame in enumerate(pose_frames):
-            if frame.is_valid():
-                ref_idx = i
-                break
-                
-        ref_landmarks = pose_frames[ref_idx].world_landmarks
-        
-        # Calculate actual leg lengths in BVH units
-        left_hip = np.array([ref_landmarks[mp_pose.PoseLandmark.LEFT_HIP].x, -ref_landmarks[mp_pose.PoseLandmark.LEFT_HIP].y, ref_landmarks[mp_pose.PoseLandmark.LEFT_HIP].z]) * self.scale
-        left_knee = np.array([ref_landmarks[mp_pose.PoseLandmark.LEFT_KNEE].x, -ref_landmarks[mp_pose.PoseLandmark.LEFT_KNEE].y, ref_landmarks[mp_pose.PoseLandmark.LEFT_KNEE].z]) * self.scale
-        left_ankle = np.array([ref_landmarks[mp_pose.PoseLandmark.LEFT_ANKLE].x, -ref_landmarks[mp_pose.PoseLandmark.LEFT_ANKLE].y, ref_landmarks[mp_pose.PoseLandmark.LEFT_ANKLE].z]) * self.scale
-        
+        # Initialize with first frame's hip center
+        if not pose_frames or not pose_frames[0].world_landmarks:
+            return [np.array([0.0, BVH_CONFIG['root_height'], 0.0])] * len(pose_frames)
+
+        # Initial position (0,0,0) relative to start
+        current_root_pos = np.array([0.0, BVH_CONFIG['root_height'], 0.0])
+        positions.append(current_root_pos.copy())
+
+        # Calculate leg length for depth estimation
+        left_hip = np.array([pose_frames[0].world_landmarks[mp_pose.PoseLandmark.LEFT_HIP].x, pose_frames[0].world_landmarks[mp_pose.PoseLandmark.LEFT_HIP].y, pose_frames[0].world_landmarks[mp_pose.PoseLandmark.LEFT_HIP].z])
+        left_knee = np.array([pose_frames[0].world_landmarks[mp_pose.PoseLandmark.LEFT_KNEE].x, pose_frames[0].world_landmarks[mp_pose.PoseLandmark.LEFT_KNEE].y, pose_frames[0].world_landmarks[mp_pose.PoseLandmark.LEFT_KNEE].z])
+        left_ankle = np.array([pose_frames[0].world_landmarks[mp_pose.PoseLandmark.LEFT_ANKLE].x, pose_frames[0].world_landmarks[mp_pose.PoseLandmark.LEFT_ANKLE].y, pose_frames[0].world_landmarks[mp_pose.PoseLandmark.LEFT_ANKLE].z])
         actual_leg_length = np.linalg.norm(left_knee - left_hip) + np.linalg.norm(left_ankle - left_knee)
-        
-        # Focal length estimation (approximate for standard webcam)
-        # 1.0 corresponds to ~53 degrees vertical FOV
         focal_length = PROCESSING_CONFIG.get('focal_length', 1.0)
-        
-        # Store raw calculated depths for smoothing
-        raw_depths = []
 
-        for i, frame in enumerate(pose_frames):
-            if frame.world_landmarks and frame.landmarks:
-                # Get 3D world landmarks for X/Y
-                left_hip_3d = frame.world_landmarks[mp_pose.PoseLandmark.LEFT_HIP]
-                right_hip_3d = frame.world_landmarks[mp_pose.PoseLandmark.RIGHT_HIP]
-                
-                # Get 2D normalized landmarks for depth calculation
-                l_hip_2d = np.array([frame.landmarks[mp_pose.PoseLandmark.LEFT_HIP].x, frame.landmarks[mp_pose.PoseLandmark.LEFT_HIP].y])
-                l_knee_2d = np.array([frame.landmarks[mp_pose.PoseLandmark.LEFT_KNEE].x, frame.landmarks[mp_pose.PoseLandmark.LEFT_KNEE].y])
-                l_ankle_2d = np.array([frame.landmarks[mp_pose.PoseLandmark.LEFT_ANKLE].x, frame.landmarks[mp_pose.PoseLandmark.LEFT_ANKLE].y])
-                
-                r_hip_2d = np.array([frame.landmarks[mp_pose.PoseLandmark.RIGHT_HIP].x, frame.landmarks[mp_pose.PoseLandmark.RIGHT_HIP].y])
-                r_knee_2d = np.array([frame.landmarks[mp_pose.PoseLandmark.RIGHT_KNEE].x, frame.landmarks[mp_pose.PoseLandmark.RIGHT_KNEE].y])
-                r_ankle_2d = np.array([frame.landmarks[mp_pose.PoseLandmark.RIGHT_ANKLE].x, frame.landmarks[mp_pose.PoseLandmark.RIGHT_ANKLE].y])
-                
-                # Calculate observed leg lengths in 2D
-                l_obs_len = np.linalg.norm(l_knee_2d - l_hip_2d) + np.linalg.norm(l_ankle_2d - l_knee_2d)
-                r_obs_len = np.linalg.norm(r_knee_2d - r_hip_2d) + np.linalg.norm(r_ankle_2d - r_knee_2d)
-                
-                # Calculate depth for each leg
-                l_depth = calculate_depth_from_projected_length(l_obs_len, actual_leg_length, focal_length)
-                r_depth = calculate_depth_from_projected_length(r_obs_len, actual_leg_length, focal_length)
-                
-                # Average depth
-                avg_depth = (l_depth + r_depth) / 2.0
-                raw_depths.append(avg_depth)
-                
-                # Calculate hip center X, Y
-                # Note: We use the calculated depth instead of MP's Z
-                hip_center = np.array([
-                    (left_hip_3d.x + right_hip_3d.x) / 2 * self.scale,
-                    -(left_hip_3d.y + right_hip_3d.y) / 2 * self.scale,
-                    0.0 # Placeholder, will be filled after smoothing
-                ])
-
-                # NEW: Apply drift correction during foot contacts
-                if self.enable_ik and i in self.foot_contact_frames:
-                    # During foot contact, constrain vertical movement
-                    if positions:
-                        prev_y = positions[-1][1]
-                        # Limit Y change during foot contact
-                        y_change = hip_center[1] - prev_y
-                        if abs(y_change) < 2.0:  # Small movement threshold
-                            hip_center[1] = prev_y  # Keep previous Y
-
-                positions.append(hip_center)
-            else:
-                if positions:
-                    positions.append(positions[-1])
-                    raw_depths.append(raw_depths[-1] if raw_depths else 0.0)
-                else:
-                    positions.append(np.array([0.0, BVH_CONFIG['root_height'], 0.0]))
-                    raw_depths.append(0.0)
-
-        # Apply smoothing to depths
-        if raw_depths:
-            # Use a larger window for depth as it can be noisy
-            depth_window = max(5, SMOOTHING_CONFIG['temporal_window_size'])
-            smoothed_depths = smooth_positions(
-                np.array([[0, 0, d] for d in raw_depths]), # Hack to use existing smoother
-                window_size=depth_window,
-                preserve_dynamics=False # We want stable depth
-            )[:, 2]
+        for i in range(1, len(pose_frames)):
+            prev_frame = pose_frames[i-1]
+            curr_frame = pose_frames[i]
             
-            # Apply smoothed depths to positions
-            for i in range(len(positions)):
-                positions[i][2] = smoothed_depths[i]
+            if not curr_frame.world_landmarks or not prev_frame.world_landmarks:
+                positions.append(current_root_pos.copy())
+                continue
 
-        # Apply temporal smoothing to X/Y with Y-axis preservation
-        if SMOOTHING_CONFIG['enable_temporal_smoothing'] and len(positions) > 3:
-            positions_array = np.array(positions)
-            smoothed_positions = smooth_positions(
+            # Determine if feet are planted
+            l_planted = False
+            r_planted = False
+            
+            # Check if frame index is in detected contact frames
+            # Note: self.foot_contact_frames is populated by _apply_improved_ik_corrections
+            # We need to check if the *current* frame is a contact frame for either foot
+            # But self.foot_contact_frames is a list of indices where ANY foot is in contact
+            # We need more granular info. For now, let's re-evaluate contact or assume the list implies *at least one* foot.
+            # Better approach: Check velocity of feet relative to hips in 2D to confirm which one is planted.
+            
+            # Get hip-relative foot positions (2D)
+            l_foot_curr = np.array([curr_frame.landmarks[mp_pose.PoseLandmark.LEFT_ANKLE].x, curr_frame.landmarks[mp_pose.PoseLandmark.LEFT_ANKLE].y])
+            r_foot_curr = np.array([curr_frame.landmarks[mp_pose.PoseLandmark.RIGHT_ANKLE].x, curr_frame.landmarks[mp_pose.PoseLandmark.RIGHT_ANKLE].y])
+            l_foot_prev = np.array([prev_frame.landmarks[mp_pose.PoseLandmark.LEFT_ANKLE].x, prev_frame.landmarks[mp_pose.PoseLandmark.LEFT_ANKLE].y])
+            r_foot_prev = np.array([prev_frame.landmarks[mp_pose.PoseLandmark.RIGHT_ANKLE].x, prev_frame.landmarks[mp_pose.PoseLandmark.RIGHT_ANKLE].y])
+            
+            l_hip_curr = np.array([curr_frame.landmarks[mp_pose.PoseLandmark.LEFT_HIP].x, curr_frame.landmarks[mp_pose.PoseLandmark.LEFT_HIP].y])
+            r_hip_curr = np.array([curr_frame.landmarks[mp_pose.PoseLandmark.RIGHT_HIP].x, curr_frame.landmarks[mp_pose.PoseLandmark.RIGHT_HIP].y])
+            
+            # Calculate foot velocity in screen space
+            l_vel = np.linalg.norm(l_foot_curr - l_foot_prev)
+            r_vel = np.linalg.norm(r_foot_curr - r_foot_prev)
+            
+            # Heuristic: Lower velocity = more likely planted
+            # Also check height (Y)
+            l_h = l_foot_curr[1]
+            r_h = r_foot_curr[1]
+            ground_y = max(l_h, r_h) # In MP, larger Y is lower (screen space)
+            
+            is_contact_frame = i in self.foot_contact_frames
+            
+            if is_contact_frame:
+                if l_vel < r_vel:
+                    l_planted = True
+                else:
+                    r_planted = True
+                # If both are very slow, both might be planted
+                if l_vel < 0.005 and r_vel < 0.005:
+                    l_planted = True
+                    r_planted = True
+            
+            # Calculate root delta
+            root_delta = np.zeros(3)
+            
+            if l_planted or r_planted:
+                # Calculate movement of planted foot relative to hip
+                # If foot is planted, root moves opposite to foot's relative movement
+                
+                # We need 3D relative movement. Use World Landmarks but correct for root drift?
+                # No, World Landmarks are root-centered (mostly).
+                # If MP World Landmarks are root-centered, then:
+                # Foot_World_Pos = Foot_Rel_Pos
+                # If Foot is planted in world: Foot_World_Pos_t1 = Foot_World_Pos_t0
+                # Root_World_Pos_t1 + Foot_Rel_Pos_t1 = Root_World_Pos_t0 + Foot_Rel_Pos_t0
+                # Root_World_Pos_t1 - Root_World_Pos_t0 = Foot_Rel_Pos_t0 - Foot_Rel_Pos_t1
+                # Delta_Root = -(Foot_Rel_Pos_t1 - Foot_Rel_Pos_t0)
+                
+                l_foot_rel_prev = np.array([prev_frame.world_landmarks[mp_pose.PoseLandmark.LEFT_ANKLE].x, prev_frame.world_landmarks[mp_pose.PoseLandmark.LEFT_ANKLE].y, prev_frame.world_landmarks[mp_pose.PoseLandmark.LEFT_ANKLE].z])
+                l_foot_rel_curr = np.array([curr_frame.world_landmarks[mp_pose.PoseLandmark.LEFT_ANKLE].x, curr_frame.world_landmarks[mp_pose.PoseLandmark.LEFT_ANKLE].y, curr_frame.world_landmarks[mp_pose.PoseLandmark.LEFT_ANKLE].z])
+                
+                r_foot_rel_prev = np.array([prev_frame.world_landmarks[mp_pose.PoseLandmark.RIGHT_ANKLE].x, prev_frame.world_landmarks[mp_pose.PoseLandmark.RIGHT_ANKLE].y, prev_frame.world_landmarks[mp_pose.PoseLandmark.RIGHT_ANKLE].z])
+                r_foot_rel_curr = np.array([curr_frame.world_landmarks[mp_pose.PoseLandmark.RIGHT_ANKLE].x, curr_frame.world_landmarks[mp_pose.PoseLandmark.RIGHT_ANKLE].y, curr_frame.world_landmarks[mp_pose.PoseLandmark.RIGHT_ANKLE].z])
+                
+                l_delta = -(l_foot_rel_curr - l_foot_rel_prev)
+                r_delta = -(r_foot_rel_curr - r_foot_rel_prev)
+                
+                if l_planted and r_planted:
+                    root_delta = (l_delta + r_delta) / 2.0
+                elif l_planted:
+                    root_delta = l_delta
+                elif r_planted:
+                    root_delta = r_delta
+                    
+                # Apply scale
+                root_delta *= self.scale
+                
+                # Z-axis correction (MP Z is often unreliable, scale it down or use depth estimation)
+                # Using depth estimation delta might be better for Z
+                # Calculate observed leg lengths in 2D for depth
+                l_obs_len_curr = np.linalg.norm(np.array([curr_frame.landmarks[mp_pose.PoseLandmark.LEFT_KNEE].x, curr_frame.landmarks[mp_pose.PoseLandmark.LEFT_KNEE].y]) - np.array([curr_frame.landmarks[mp_pose.PoseLandmark.LEFT_HIP].x, curr_frame.landmarks[mp_pose.PoseLandmark.LEFT_HIP].y])) + \
+                                 np.linalg.norm(np.array([curr_frame.landmarks[mp_pose.PoseLandmark.LEFT_ANKLE].x, curr_frame.landmarks[mp_pose.PoseLandmark.LEFT_ANKLE].y]) - np.array([curr_frame.landmarks[mp_pose.PoseLandmark.LEFT_KNEE].x, curr_frame.landmarks[mp_pose.PoseLandmark.LEFT_KNEE].y]))
+                l_depth_curr = calculate_depth_from_projected_length(l_obs_len_curr, actual_leg_length, focal_length)
+                
+                l_obs_len_prev = np.linalg.norm(np.array([prev_frame.landmarks[mp_pose.PoseLandmark.LEFT_KNEE].x, prev_frame.landmarks[mp_pose.PoseLandmark.LEFT_KNEE].y]) - np.array([prev_frame.landmarks[mp_pose.PoseLandmark.LEFT_HIP].x, prev_frame.landmarks[mp_pose.PoseLandmark.LEFT_HIP].y])) + \
+                                 np.linalg.norm(np.array([prev_frame.landmarks[mp_pose.PoseLandmark.LEFT_ANKLE].x, curr_frame.landmarks[mp_pose.PoseLandmark.LEFT_ANKLE].y]) - np.array([prev_frame.landmarks[mp_pose.PoseLandmark.LEFT_KNEE].x, prev_frame.landmarks[mp_pose.PoseLandmark.LEFT_KNEE].y]))
+                l_depth_prev = calculate_depth_from_projected_length(l_obs_len_prev, actual_leg_length, focal_length)
+                
+                depth_delta = l_depth_curr - l_depth_prev
+                # Blend MP Z delta and calculated depth delta?
+                # For now, stick to MP Z but scaled down if needed.
+                
+            else:
+                # Flight phase - use MP trajectory (scaled) or depth estimation
+                
+                # Calculate hip center movement in screen space (X, Y)
+                hip_curr_2d = (l_hip_curr + r_hip_curr) / 2.0
+                hip_prev_2d = (np.array([prev_frame.landmarks[mp_pose.PoseLandmark.LEFT_HIP].x, prev_frame.landmarks[mp_pose.PoseLandmark.LEFT_HIP].y]) + 
+                               np.array([prev_frame.landmarks[mp_pose.PoseLandmark.RIGHT_HIP].x, prev_frame.landmarks[mp_pose.PoseLandmark.RIGHT_HIP].y])) / 2.0
+                
+                delta_2d = hip_curr_2d - hip_prev_2d
+                root_delta[0] = delta_2d[0] * self.scale # X
+                root_delta[1] = -delta_2d[1] * self.scale # Y (inverted)
+                
+                # Calculate depth change for Z
+                # Use leg length projection to estimate depth change
+                l_obs_len_curr = np.linalg.norm(np.array([curr_frame.landmarks[mp_pose.PoseLandmark.LEFT_KNEE].x, curr_frame.landmarks[mp_pose.PoseLandmark.LEFT_KNEE].y]) - np.array([curr_frame.landmarks[mp_pose.PoseLandmark.LEFT_HIP].x, curr_frame.landmarks[mp_pose.PoseLandmark.LEFT_HIP].y])) + \
+                                 np.linalg.norm(np.array([curr_frame.landmarks[mp_pose.PoseLandmark.LEFT_ANKLE].x, curr_frame.landmarks[mp_pose.PoseLandmark.LEFT_ANKLE].y]) - np.array([curr_frame.landmarks[mp_pose.PoseLandmark.LEFT_KNEE].x, curr_frame.landmarks[mp_pose.PoseLandmark.LEFT_KNEE].y]))
+                l_depth_curr = calculate_depth_from_projected_length(l_obs_len_curr, actual_leg_length, focal_length)
+                
+                l_obs_len_prev = np.linalg.norm(np.array([prev_frame.landmarks[mp_pose.PoseLandmark.LEFT_KNEE].x, prev_frame.landmarks[mp_pose.PoseLandmark.LEFT_KNEE].y]) - np.array([prev_frame.landmarks[mp_pose.PoseLandmark.LEFT_HIP].x, prev_frame.landmarks[mp_pose.PoseLandmark.LEFT_HIP].y])) + \
+                                 np.linalg.norm(np.array([prev_frame.landmarks[mp_pose.PoseLandmark.LEFT_ANKLE].x, curr_frame.landmarks[mp_pose.PoseLandmark.LEFT_ANKLE].y]) - np.array([prev_frame.landmarks[mp_pose.PoseLandmark.LEFT_KNEE].x, prev_frame.landmarks[mp_pose.PoseLandmark.LEFT_KNEE].y]))
+                l_depth_prev = calculate_depth_from_projected_length(l_obs_len_prev, actual_leg_length, focal_length)
+                
+                depth_delta = l_depth_curr - l_depth_prev
+                
+                # Apply depth delta to Z
+                # Scale multiplier for depth to match X/Y scale roughly
+                z_scale = PROCESSING_CONFIG.get('depth_scale_multiplier', 1.0) * 10.0 # Boost Z slightly
+                root_delta[2] = depth_delta * z_scale
+
+            # Update position
+            current_root_pos += root_delta
+            
+            # Enforce ground floor constraint (Y shouldn't go too low)
+            # But BVH Y is height.
+            
+            positions.append(current_root_pos.copy())
+
+        # Apply smoothing
+        if SMOOTHING_CONFIG['enable_temporal_smoothing']:
+             positions_array = np.array(positions)
+             smoothed_positions = smooth_positions(
                 positions_array,
                 window_size=SMOOTHING_CONFIG['temporal_window_size'],
                 preserve_dynamics=SMOOTHING_CONFIG['preserve_dynamics'],
                 preserve_y_axis=False
             )
-            positions = [pos for pos in smoothed_positions]
-
-        # Make positions relative to first frame
-        if positions:
-            origin = positions[0].copy()
-            # Keep the calculated depth absolute relative to camera, but we need to place the character 
-            # at 0,0,0 initially? 
-            # Standard BVH usually starts at 0,0,0. 
-            # But if we want to show movement towards/away from camera, we should keep the relative Z change.
-            # So subtracting origin is correct for relative movement.
-            
-            for i in range(len(positions)):
-                positions[i] = positions[i] - origin
-
-                # NEW: More aggressive Y filtering during foot contacts
-                if self.enable_ik and i in self.foot_contact_frames:
-                    if abs(positions[i][1]) < 2.0:
-                        positions[i][1] = 0.0
-
-                positions[i][1] += BVH_CONFIG['root_height']
+             positions = [pos for pos in smoothed_positions]
 
         return positions
 

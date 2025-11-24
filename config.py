@@ -20,7 +20,8 @@ PROCESSING_CONFIG = {
     'movement_scale': 0.01,      # Scale factor for root movement
     'depth_scale_multiplier': 1.0, # Multiplier for Z-axis movement (depth)
     'min_bone_length': 1.0,  # Minimum bone length in cm
-    'confidence_threshold': 0.5
+    'confidence_threshold': 0.5,
+    'arm_confidence_threshold': 0.5  # Minimum confidence for arm tracking
 }
 
 # Smoothing Settings (gentle approach learned from experiments)
