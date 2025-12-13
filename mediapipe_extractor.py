@@ -58,7 +58,8 @@ class MediaPipeExtractor:
                 min_detection_confidence=self.config.get('min_detection_confidence', 0.5),
                 min_tracking_confidence=self.config.get('min_tracking_confidence', 0.5),
                 enable_segmentation=False,
-                smooth_segmentation=False
+                smooth_segmentation=False,
+                refine_face_landmarks=True
             )
         else:
             # Fallback to Pose-only model

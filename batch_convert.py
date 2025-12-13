@@ -1,4 +1,5 @@
 import os
+import sys
 import glob
 import subprocess
 from pathlib import Path
@@ -34,7 +35,7 @@ def batch_convert():
         # Construct command
         # Using --ik flag as per latest improvements
         cmd = [
-            "python", "bvh_converter.py",
+            sys.executable, "bvh_converter.py",
             "--video", video_path,
             "--output", output_path,
             "--ik"

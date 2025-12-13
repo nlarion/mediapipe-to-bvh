@@ -578,8 +578,14 @@ class ImprovedBVHConverter:
 
             # Special handling for specific joints
             if joint.name == "Head":
-                calculated_euler = np.array([5.0, 0.0, 0.0])
-                is_global = False # Fixed local rotation
+                # IMPROVED: Calculate head rotation from landmarks
+                head_rotation = self._calculate_head_rotation(landmarks)
+                if head_rotation is not None:
+                    calculated_euler = head_rotation
+                    is_global = True
+                else:
+                    calculated_euler = np.array([0.0, 0.0, 0.0])
+                    is_global = False
 
             elif joint.name in ["Chest", "Neck"]:
                 if joint.children:
@@ -798,13 +804,6 @@ class ImprovedBVHConverter:
             pinky_3d = wrist_world + (pinky_mcp[0] - wrist_2d[0]) * hand_scale * hand_right + \
                                     (pinky_mcp[1] - wrist_2d[1]) * hand_scale * hand_up
 
-            middle_3d = wrist_world + (middle_mcp[0] - wrist_2d[0]) * hand_scale * hand_right + \
-                                     (middle_mcp[1] - wrist_2d[1]) * hand_scale * hand_up
-
-            # Calculate hand vectors
-            v1 = index_3d - wrist_world
-            v2 = pinky_3d - wrist_world
-
             # Palm normal (perpendicular to palm)
             palm_normal = np.cross(v1, v2)
             if is_left:
@@ -827,6 +826,59 @@ class ImprovedBVHConverter:
 
         except Exception as e:
             # Fallback to simple direction if calculation fails
+            return None
+
+    def _calculate_head_rotation(self, landmarks) -> Optional[np.ndarray]:
+        """Calculate head rotation from face landmarks."""
+        try:
+            nose_idx = mp_pose.PoseLandmark.NOSE
+            l_ear_idx = mp_pose.PoseLandmark.LEFT_EAR
+            r_ear_idx = mp_pose.PoseLandmark.RIGHT_EAR
+
+            nose = np.array([landmarks[nose_idx].x, -landmarks[nose_idx].y, landmarks[nose_idx].z])
+            l_ear = np.array([landmarks[l_ear_idx].x, -landmarks[l_ear_idx].y, landmarks[l_ear_idx].z])
+            r_ear = np.array([landmarks[r_ear_idx].x, -landmarks[r_ear_idx].y, landmarks[r_ear_idx].z])
+
+            # Calculate head basis vectors
+            # Right vector: Right Ear - Left Ear (MP coordinates)
+            # If +X is Left (based on offsets), then Right is -X.
+            # L_Ear has higher X than R_Ear if +X is Left.
+            # So R_Ear - L_Ear is negative X (Right).
+            right = r_ear - l_ear
+            right = right / np.linalg.norm(right)
+
+            # Forward vector: Mid(Ears) to Nose
+            mid_ears = (l_ear + r_ear) / 2
+            forward = nose - mid_ears
+            forward = forward / np.linalg.norm(forward)
+
+            # Up vector: Cross(Right, Forward)
+            up = np.cross(right, forward)
+            up = up / np.linalg.norm(up)
+
+            # Re-orthogonalize forward
+            forward = np.cross(up, right)
+            forward = forward / np.linalg.norm(forward)
+
+            # We want to align the Head bone (Y-axis) with 'up'.
+            # And Head bone (Z-axis) with 'forward'.
+            # And Head bone (X-axis) with 'right' (or left?).
+            
+            # If X is Left, then Right is -X.
+            # So Left = -Right.
+            left = -right
+            
+            # Matrix columns: [Left, Up, Forward]
+            # This assumes BVH local axes: X=Left, Y=Up, Z=Forward.
+            rot_mat = np.column_stack((left, up, forward))
+            
+            from scipy.spatial.transform import Rotation as R
+            r = R.from_matrix(rot_mat)
+            euler = r.as_euler('XYZ', degrees=True)
+            
+            return euler
+
+        except Exception:
             return None
 
     def _calculate_root_motion_from_feet(self, pose_frames: List[PoseFrame]) -> List[np.ndarray]:

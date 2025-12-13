@@ -76,7 +76,10 @@ class SkeletonMapper:
         head.channels = ['Xrotation', 'Yrotation', 'Zrotation']
         
         # Left arm chain
-        left_shoulder = BVHJoint("LeftShoulder", chest)
+        left_collar = BVHJoint("LeftCollar", chest)
+        left_collar.channels = ['Xrotation', 'Yrotation', 'Zrotation']
+
+        left_shoulder = BVHJoint("LeftShoulder", left_collar)
         left_shoulder.channels = ['Xrotation', 'Yrotation', 'Zrotation']
         
         left_arm = BVHJoint("LeftArm", left_shoulder)
@@ -89,7 +92,10 @@ class SkeletonMapper:
         left_hand.channels = ['Xrotation', 'Yrotation', 'Zrotation']
         
         # Right arm chain
-        right_shoulder = BVHJoint("RightShoulder", chest)
+        right_collar = BVHJoint("RightCollar", chest)
+        right_collar.channels = ['Xrotation', 'Yrotation', 'Zrotation']
+
+        right_shoulder = BVHJoint("RightShoulder", right_collar)
         right_shoulder.channels = ['Xrotation', 'Yrotation', 'Zrotation']
         
         right_arm = BVHJoint("RightArm", right_shoulder)
@@ -128,20 +134,22 @@ class SkeletonMapper:
         return {
             'Hips': [mp_pose.PoseLandmark.LEFT_HIP, mp_pose.PoseLandmark.RIGHT_HIP],
             'Spine': [mp_pose.PoseLandmark.LEFT_HIP, mp_pose.PoseLandmark.RIGHT_HIP,
-                     mp_pose.PoseLandmark.LEFT_SHOULDER, mp_pose.PoseLandmark.RIGHT_SHOULDER],
-            'Chest': [mp_pose.PoseLandmark.LEFT_SHOULDER, mp_pose.PoseLandmark.RIGHT_SHOULDER],
+                     mp_pose.PoseLandmark.LEFT_SHOULDER, mp_pose.PoseLandmark.RIGHT_SHOULDER], # Mid-Torso
+            'Chest': [mp_pose.PoseLandmark.LEFT_SHOULDER, mp_pose.PoseLandmark.RIGHT_SHOULDER], # Upper-Torso
             'Neck': [mp_pose.PoseLandmark.LEFT_SHOULDER, mp_pose.PoseLandmark.RIGHT_SHOULDER,
                     mp_pose.PoseLandmark.LEFT_EAR, mp_pose.PoseLandmark.RIGHT_EAR],
             'Head': [mp_pose.PoseLandmark.NOSE, mp_pose.PoseLandmark.LEFT_EAR, 
                     mp_pose.PoseLandmark.RIGHT_EAR],
             
             # Arms
+            'LeftCollar': [mp_pose.PoseLandmark.LEFT_SHOULDER, mp_pose.PoseLandmark.RIGHT_SHOULDER], # Upper Chest
             'LeftShoulder': [mp_pose.PoseLandmark.LEFT_SHOULDER],
             'LeftArm': [mp_pose.PoseLandmark.LEFT_ELBOW],
             'LeftForeArm': [mp_pose.PoseLandmark.LEFT_WRIST],
             'LeftHand': [mp_pose.PoseLandmark.LEFT_WRIST, mp_pose.PoseLandmark.LEFT_PINKY,
                         mp_pose.PoseLandmark.LEFT_INDEX],
             
+            'RightCollar': [mp_pose.PoseLandmark.LEFT_SHOULDER, mp_pose.PoseLandmark.RIGHT_SHOULDER], # Upper Chest
             'RightShoulder': [mp_pose.PoseLandmark.RIGHT_SHOULDER],
             'RightArm': [mp_pose.PoseLandmark.RIGHT_ELBOW],
             'RightForeArm': [mp_pose.PoseLandmark.RIGHT_WRIST],
@@ -167,8 +175,10 @@ class SkeletonMapper:
             'Chest': np.array([0, 15, 0]),
             'Neck': np.array([0, 5, 0]),
             'Head': np.array([0, 10, 0]),
-            'LeftShoulder': np.array([-8, 2, 0]),
-            'RightShoulder': np.array([8, 2, 0]),
+            'LeftCollar': np.array([3, 4, 0]),
+            'RightCollar': np.array([-3, 4, 0]),
+            'LeftShoulder': np.array([-5, 0, 0]),
+            'RightShoulder': np.array([5, 0, 0]),
             'LeftArm': np.array([-15, -5, 0]),
             'RightArm': np.array([15, -5, 0]),
             'LeftForeArm': np.array([-12, -8, 0]),
