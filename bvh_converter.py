@@ -16,6 +16,7 @@ import time
 import copy
 from typing import List, Dict, Optional, Tuple
 import mediapipe as mp
+from scipy.spatial.transform import Rotation  # FIX: used by _rotation_from_basis
 
 from mediapipe_extractor import MediaPipeExtractor, PoseFrame
 from skeleton_mapper import SkeletonMapper, BVHJoint
@@ -421,21 +422,11 @@ class ImprovedBVHConverter:
             return None
 
     def _clamp_head_pitch(self, euler_xyz: np.ndarray, min_pitch: float = -45.0, max_pitch: float = 45.0) -> np.ndarray:
-        """
-        Safety clamp: prevent extreme head pitch.
-        Assumes Xrotation is pitch in this rig (common in BVH XYZ).
-        """
         out = np.array(euler_xyz, dtype=float)
         out[0] = float(np.clip(out[0], min_pitch, max_pitch))
         return out
 
     def _face_mesh_head_basis(self, frame: PoseFrame) -> Optional[Tuple[np.ndarray, np.ndarray, np.ndarray]]:
-        """
-        Compute head basis from FaceMesh landmarks in image space.
-        Returns (left, up, forward) as 3D vectors in a pseudo-camera space:
-          x right, y down, z forward (approx).
-        We then convert to BVH-like by flipping y later in basis construction.
-        """
         if self._face_mesh is None:
             return None
         if not getattr(frame, "image_bgr", None) is not None:
@@ -449,21 +440,13 @@ class ImprovedBVHConverter:
 
         lm = res.multi_face_landmarks[0].landmark
 
-        # FaceMesh indices (stable):
-        # 33: left eye outer corner
-        # 263: right eye outer corner
-        # 1: nose tip
-        # 10: forehead/glabella-ish
-        # 152: chin
         left_eye = np.array([lm[33].x, lm[33].y, lm[33].z], dtype=float)
         right_eye = np.array([lm[263].x, lm[263].y, lm[263].z], dtype=float)
         forehead = np.array([lm[10].x, lm[10].y, lm[10].z], dtype=float)
         chin = np.array([lm[152].x, lm[152].y, lm[152].z], dtype=float)
 
-        # In image coords: x right, y down. We'll build:
-        # left axis (BVH +X left) => from right_eye to left_eye
         left_axis_cam = self._safe_normalize(left_eye - right_eye)
-        up_axis_cam = self._safe_normalize(forehead - chin)  # points up (toward forehead)
+        up_axis_cam = self._safe_normalize(forehead - chin)
         if left_axis_cam is None or up_axis_cam is None:
             return None
 
@@ -471,14 +454,10 @@ class ImprovedBVHConverter:
         if forward_axis_cam is None:
             return None
 
-        # Re-orthogonalize up
         up_axis_cam = self._safe_normalize(np.cross(forward_axis_cam, left_axis_cam))
         if up_axis_cam is None:
             return None
 
-        # Convert camera-ish basis to BVH-like:
-        # Our converter uses BVH-like space where Y is up, but image y is down.
-        # Flip Y component of each axis.
         left_axis = left_axis_cam.copy()
         up_axis = up_axis_cam.copy()
         forward_axis = forward_axis_cam.copy()
@@ -486,7 +465,6 @@ class ImprovedBVHConverter:
         up_axis[1] *= -1.0
         forward_axis[1] *= -1.0
 
-        # Normalize again
         left_axis = self._safe_normalize(left_axis) or left_axis
         up_axis = self._safe_normalize(up_axis) or up_axis
         forward_axis = self._safe_normalize(forward_axis) or forward_axis
@@ -508,7 +486,6 @@ class ImprovedBVHConverter:
             if chest_global_euler is not None:
                 chest_global_rot = Rotation.from_euler('XYZ', chest_global_euler, degrees=True)
 
-        # Head global from FaceMesh if enabled and available
         head_global_euler = None
         head_global_rot = None
         if self.enable_face:
@@ -516,7 +493,6 @@ class ImprovedBVHConverter:
             if face_basis is not None:
                 head_global_euler = self._rotation_from_basis(*face_basis)
 
-        # Fallback to torso-based head if FaceMesh not available
         if head_global_euler is None:
             head_global_euler = self._calculate_head_global_rotation(landmarks)
             if head_global_euler is not None:
@@ -584,9 +560,6 @@ class ImprovedBVHConverter:
         return rotations
 
     def _calculate_head_global_rotation(self, landmarks) -> Optional[np.ndarray]:
-        """
-        Torso-based fallback head rotation (still imperfect).
-        """
         try:
             torso_basis = self._calculate_torso_basis(landmarks)
             if torso_basis is None:
@@ -738,8 +711,6 @@ def main():
             return
         pose_frames = extractor.interpolate_missing_frames(pose_frames)
 
-    # Attach images to frames if face is enabled (FaceMesh needs image)
-    # We re-read the video at the same sampling rate to store BGR frames.
     if args.face:
         cap = mp.solutions.cv2.VideoCapture(args.video) if hasattr(mp.solutions, "cv2") else None
         if cap is None:
