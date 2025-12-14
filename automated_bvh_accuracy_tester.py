@@ -33,6 +33,7 @@ from scipy import stats
 mp_pose = mp.solutions.pose
 mp_drawing = mp.solutions.drawing_utils
 
+
 @dataclass
 class ImprovedAccuracyMetrics:
     """Enhanced accuracy metrics including visual quality measures"""
@@ -1079,4 +1080,98 @@ class ImprovedBVHAccuracyAnalyzer:
             for metric, confidence in metrics.confidence_scores.items():
                 f.write(f"{metric}: {confidence:.1f}%\n")
 
-    def _generate_accuracy
+    def _generate_accuracy_plots(self, metrics: ImprovedAccuracyMetrics, output_dir: str, timestamp: str):
+        """Generate summary plots for the improved accuracy metrics."""
+        out_dir = Path(output_dir)
+        out_dir.mkdir(parents=True, exist_ok=True)
+
+        fig, axes = plt.subplots(2, 2, figsize=(14, 9))
+        fig.suptitle("Improved BVH Accuracy Analysis", fontsize=14, fontweight='bold')
+
+        # 1) Joint angle errors
+        ax = axes[0, 0]
+        joints = list(metrics.joint_angle_errors.keys())
+        vals = [metrics.joint_angle_errors[j] for j in joints]
+        ax.bar(range(len(joints)), vals)
+        ax.set_xticks(range(len(joints)))
+        ax.set_xticklabels(joints, rotation=60, ha='right', fontsize=8)
+        ax.set_title("Mean Joint Angle Error (deg)")
+        ax.set_ylabel("Degrees")
+        ax.axhline(metrics.mean_angle_error, color='red', linestyle='--', linewidth=1, label='Mean')
+        ax.legend()
+
+        # 2) Visual quality metrics
+        ax = axes[0, 1]
+        labels = [
+            "Visual\nNaturalness",
+            "Temporal\nDrift",
+            "Over-\nSmoothing",
+            "Ground\nContact",
+            "Knee\nStability",
+            "Trajectory",
+        ]
+        scores = [
+            metrics.visual_naturalness_score,
+            metrics.temporal_drift_score,
+            metrics.over_smoothing_score,
+            metrics.ground_contact_score,
+            metrics.knee_stability_score,
+            metrics.trajectory_score,
+        ]
+        colors = ['green' if s >= 70 else 'orange' if s >= 40 else 'red' for s in scores]
+        ax.bar(labels, scores, color=colors)
+        ax.set_ylim(0, 100)
+        ax.set_title("Visual Quality Scores (0-100)")
+        ax.axhline(70, color='green', linestyle='--', alpha=0.3)
+        ax.axhline(40, color='orange', linestyle='--', alpha=0.3)
+
+        # 3) Head/Neck metrics
+        ax = axes[1, 0]
+        hn_labels = ["Head pos\nerr", "Neck pos\nerr", "Head dir\nerr (deg)", "Neck dir\nerr (deg)"]
+        hn_vals = [
+            metrics.head_position_error,
+            metrics.neck_position_error,
+            metrics.head_direction_error_deg,
+            metrics.neck_direction_error_deg,
+        ]
+        ax.bar(hn_labels, hn_vals, color=['steelblue', 'steelblue', 'purple', 'purple'])
+        ax.set_title("Head/Neck Errors")
+        ax.set_ylabel("Units / Degrees")
+
+        # 4) Overall score + key stats
+        ax = axes[1, 1]
+        ax.axis('off')
+        summary = (
+            f"Overall Score: {metrics.overall_accuracy_score:.1f}/100\n\n"
+            f"Mean angle error: {metrics.mean_angle_error:.2f}°\n"
+            f"Mean rel pos error: {metrics.mean_relative_position_error:.2f}\n"
+            f"Symmetry: {metrics.left_right_symmetry:.1f}% (naturalness {metrics.symmetry_naturalness:.1f})\n\n"
+            f"Head pos err: {metrics.head_position_error:.2f}\n"
+            f"Neck pos err: {metrics.neck_position_error:.2f}\n"
+            f"Head dir err: {metrics.head_direction_error_deg:.1f}°\n"
+            f"Neck dir err: {metrics.neck_direction_error_deg:.1f}°\n"
+        )
+        ax.text(0.02, 0.98, summary, va='top', fontsize=10)
+
+        plt.tight_layout(rect=[0, 0, 1, 0.95])
+        plot_path = out_dir / f"improved_accuracy_plot_{timestamp}.png"
+        plt.savefig(plot_path, dpi=150, bbox_inches='tight')
+        plt.close()
+
+    def _generate_accuracy_plots_placeholder(self):
+        """Deprecated placeholder kept for backward compatibility."""
+        return
+
+def main():
+    parser = argparse.ArgumentParser(description="Improved BVH accuracy testing with visual quality metrics")
+    parser.add_argument("--video", required=True, help="Path to input video")
+    parser.add_argument("--bvh", required=True, help="Path to BVH file")
+    parser.add_argument("--output-dir", default="accuracy_tests", help="Output directory")
+    args = parser.parse_args()
+
+    analyzer = ImprovedBVHAccuracyAnalyzer()
+    analyzer.run_improved_accuracy_test(args.video, args.bvh, args.output_dir)
+
+
+if __name__ == "__main__":
+    main()
