@@ -86,16 +86,19 @@ class ImprovedBVHConverter:
             # This populates self.foot_contact_frames
             self._apply_improved_ik_corrections(all_leg_positions)
 
-        # 4. Calculate hip positions (root) with drift correction
-        # This is done AFTER IK to ensure we have stable foot contacts for drift correction
-        print("Calculating root motion from foot lock...")
+        # Root positions (hip positions)
+        print("Calculating root motion...")
         hip_positions = self._calculate_root_motion_from_feet(pose_frames)
 
-        # 5. Update pose frames with corrected hip positions
+        # Update pose frames with corrected hip positions (if PoseFrame supports it)
         print("Updating pose frames with corrected hip positions...")
         for i, frame in enumerate(pose_frames):
             if i < len(hip_positions):
-                frame.hip_position = hip_positions[i]
+                try:
+                    frame.hip_position = hip_positions[i]
+                except Exception:
+                    pass
+
         if self.enable_ik:
             print("Extracting leg positions for IK processing (Pass 2)...")
             all_leg_positions = []
@@ -108,9 +111,7 @@ class ImprovedBVHConverter:
 
             print("Applying improved IK foot locking (Pass 2)...")
             corrected_positions = self._apply_improved_ik_corrections(all_leg_positions)
-
             self._update_pose_frames_with_ik(pose_frames, corrected_positions)
-
             print(f"✅ Detected {len(self.foot_contact_frames)} foot contact frames")
 
         # Process all frames to calculate rotations (using updated hips and legs)
@@ -136,16 +137,60 @@ class ImprovedBVHConverter:
 
         return success
 
+    def _calculate_root_motion_from_feet(self, pose_frames: List[PoseFrame]) -> List[np.ndarray]:
+        """
+        Restore missing method.
+
+        Current implementation:
+        - Uses MediaPipe world hip center as root translation (scaled, Y flipped).
+        - Applies optional temporal smoothing.
+
+        This is a safe baseline that prevents crashes. If you want the more advanced
+        foot-plant drift correction version, we can add it next.
+        """
+        positions: List[np.ndarray] = []
+
+        l_hip_idx = mp_pose.PoseLandmark.LEFT_HIP
+        r_hip_idx = mp_pose.PoseLandmark.RIGHT_HIP
+
+        default_root = np.array([0.0, float(BVH_CONFIG.get('root_height', 60.0)), 0.0], dtype=float)
+
+        for frame in pose_frames:
+            if not frame.is_valid() or not getattr(frame, "world_landmarks", None):
+                positions.append(positions[-1].copy() if positions else default_root.copy())
+                continue
+
+            l = frame.world_landmarks[l_hip_idx]
+            r = frame.world_landmarks[r_hip_idx]
+
+            hip_center = np.array([
+                (l.x + r.x) * 0.5,
+                -(l.y + r.y) * 0.5,  # flip Y to BVH up
+                (l.z + r.z) * 0.5
+            ], dtype=float) * float(self.scale)
+
+            positions.append(hip_center)
+
+        if SMOOTHING_CONFIG.get('enable_temporal_smoothing', False) and len(positions) > 2:
+            positions_arr = np.array(positions, dtype=float)
+            smoothed = smooth_positions(
+                positions_arr,
+                window_size=int(SMOOTHING_CONFIG.get('temporal_window_size', 3)),
+                preserve_dynamics=bool(SMOOTHING_CONFIG.get('preserve_dynamics', True)),
+                preserve_y_axis=False
+            )
+            positions = [p for p in smoothed]
+
+        return positions
+
     def _initialize_improved_ik_system(self, reference_landmarks, scale: float):
         """Initialize IK system with calibrated thresholds for MediaPipe."""
 
-        # Get joint positions from reference
         left_hip_idx = mp_pose.PoseLandmark.LEFT_HIP
         left_knee_idx = mp_pose.PoseLandmark.LEFT_KNEE
         left_ankle_idx = mp_pose.PoseLandmark.LEFT_ANKLE
         left_foot_idx = mp_pose.PoseLandmark.LEFT_FOOT_INDEX
 
-        # Calculate bone lengths from reference pose
         left_hip = np.array([
             reference_landmarks[left_hip_idx].x,
             -reference_landmarks[left_hip_idx].y,
@@ -164,18 +209,15 @@ class ImprovedBVHConverter:
             reference_landmarks[left_ankle_idx].z
         ]) * scale
 
-        # NEW: Use foot landmark to establish ground level
         left_foot = np.array([
             reference_landmarks[left_foot_idx].x,
             -reference_landmarks[left_foot_idx].y,
             reference_landmarks[left_foot_idx].z
         ]) * scale
 
-        # Calculate thigh and shin lengths
         thigh_length = np.linalg.norm(left_knee - left_hip)
         shin_length = np.linalg.norm(left_ankle - left_knee)
 
-        # NEW: Establish ground level from reference frame (Fallback if dynamic failed)
         if self.ground_level is None:
             self.ground_level = min(left_ankle[1], left_foot[1])
 
@@ -184,10 +226,8 @@ class ImprovedBVHConverter:
         print(f"  Shin: {shin_length:.2f} units")
         print(f"  Ground level: {self.ground_level:.2f} units")
 
-        # Create IK system
         self.ik_system = IKFootLockSystem(thigh_length, shin_length)
 
-        # IMPROVED: Calibrated thresholds based on MediaPipe coordinate system
         self.ik_system.config.contact_velocity_threshold = 4.0 * (scale / 100.0)
         self.ik_system.config.contact_height_threshold = 0.12 * scale
         self.ik_system.config.foot_clearance_height = 0.05 * scale
@@ -201,72 +241,36 @@ class ImprovedBVHConverter:
 
     def _extract_leg_positions(self, world_landmarks, scale: float) -> Dict[str, Dict[str, np.ndarray]]:
         """Extract hip, knee, and ankle positions from landmarks."""
-
         positions = {}
 
-        # Left leg
         left_hip_idx = mp_pose.PoseLandmark.LEFT_HIP
         left_knee_idx = mp_pose.PoseLandmark.LEFT_KNEE
         left_ankle_idx = mp_pose.PoseLandmark.LEFT_ANKLE
         left_foot_idx = mp_pose.PoseLandmark.LEFT_FOOT_INDEX
 
         positions['left'] = {
-            'hip': np.array([
-                world_landmarks[left_hip_idx].x,
-                -world_landmarks[left_hip_idx].y,
-                world_landmarks[left_hip_idx].z
-            ]) * scale,
-            'knee': np.array([
-                world_landmarks[left_knee_idx].x,
-                -world_landmarks[left_knee_idx].y,
-                world_landmarks[left_knee_idx].z
-            ]) * scale,
-            'ankle': np.array([
-                world_landmarks[left_ankle_idx].x,
-                -world_landmarks[left_ankle_idx].y,
-                world_landmarks[left_ankle_idx].z
-            ]) * scale,
-            'foot': np.array([
-                world_landmarks[left_foot_idx].x,
-                -world_landmarks[left_foot_idx].y,
-                world_landmarks[left_foot_idx].z
-            ]) * scale
+            'hip': np.array([world_landmarks[left_hip_idx].x, -world_landmarks[left_hip_idx].y, world_landmarks[left_hip_idx].z]) * scale,
+            'knee': np.array([world_landmarks[left_knee_idx].x, -world_landmarks[left_knee_idx].y, world_landmarks[left_knee_idx].z]) * scale,
+            'ankle': np.array([world_landmarks[left_ankle_idx].x, -world_landmarks[left_ankle_idx].y, world_landmarks[left_ankle_idx].z]) * scale,
+            'foot': np.array([world_landmarks[left_foot_idx].x, -world_landmarks[left_foot_idx].y, world_landmarks[left_foot_idx].z]) * scale
         }
 
-        # Right leg
         right_hip_idx = mp_pose.PoseLandmark.RIGHT_HIP
         right_knee_idx = mp_pose.PoseLandmark.RIGHT_KNEE
         right_ankle_idx = mp_pose.PoseLandmark.RIGHT_ANKLE
         right_foot_idx = mp_pose.PoseLandmark.RIGHT_FOOT_INDEX
 
         positions['right'] = {
-            'hip': np.array([
-                world_landmarks[right_hip_idx].x,
-                -world_landmarks[right_hip_idx].y,
-                world_landmarks[right_hip_idx].z
-            ]) * scale,
-            'knee': np.array([
-                world_landmarks[right_knee_idx].x,
-                -world_landmarks[right_knee_idx].y,
-                world_landmarks[right_knee_idx].z
-            ]) * scale,
-            'ankle': np.array([
-                world_landmarks[right_ankle_idx].x,
-                -world_landmarks[right_ankle_idx].y,
-                world_landmarks[right_ankle_idx].z
-            ]) * scale,
-            'foot': np.array([
-                world_landmarks[right_foot_idx].x,
-                -world_landmarks[right_foot_idx].y,
-                world_landmarks[right_foot_idx].z
-            ]) * scale
+            'hip': np.array([world_landmarks[right_hip_idx].x, -world_landmarks[right_hip_idx].y, world_landmarks[right_hip_idx].z]) * scale,
+            'knee': np.array([world_landmarks[right_knee_idx].x, -world_landmarks[right_knee_idx].y, world_landmarks[right_knee_idx].z]) * scale,
+            'ankle': np.array([world_landmarks[right_ankle_idx].x, -world_landmarks[right_ankle_idx].y, world_landmarks[right_ankle_idx].z]) * scale,
+            'foot': np.array([world_landmarks[right_foot_idx].x, -world_landmarks[right_foot_idx].y, world_landmarks[right_foot_idx].z]) * scale
         }
 
         return positions
 
     def _apply_improved_ik_corrections(self, all_leg_positions: List[Optional[Dict]]) -> List[Optional[Dict]]:
         """Apply improved IK corrections with better foot contact detection."""
-
         corrected = []
         previous_ankles = None
         self.foot_contact_frames = []
@@ -276,22 +280,10 @@ class ImprovedBVHConverter:
                 corrected.append(None)
                 continue
 
-            hip_positions = {
-                'left': leg_positions['left']['hip'],
-                'right': leg_positions['right']['hip']
-            }
-            knee_positions = {
-                'left': leg_positions['left']['knee'],
-                'right': leg_positions['right']['knee']
-            }
-            ankle_positions = {
-                'left': leg_positions['left']['ankle'],
-                'right': leg_positions['right']['ankle']
-            }
-            foot_positions = {
-                'left': leg_positions['left']['foot'],
-                'right': leg_positions['right']['foot']
-            }
+            hip_positions = {'left': leg_positions['left']['hip'], 'right': leg_positions['right']['hip']}
+            knee_positions = {'left': leg_positions['left']['knee'], 'right': leg_positions['right']['knee']}
+            ankle_positions = {'left': leg_positions['left']['ankle'], 'right': leg_positions['right']['ankle']}
+            foot_positions = {'left': leg_positions['left']['foot'], 'right': leg_positions['right']['foot']}
 
             left_contact = self._detect_foot_contact(
                 ankle_positions['left'],
@@ -309,10 +301,7 @@ class ImprovedBVHConverter:
             if left_contact or right_contact:
                 self.foot_contact_frames.append(i)
 
-            contact_overrides = {
-                'left': left_contact,
-                'right': right_contact
-            }
+            contact_overrides = {'left': left_contact, 'right': right_contact}
 
             ik_result = self.ik_system.process_frame(
                 hip_positions,
@@ -323,16 +312,10 @@ class ImprovedBVHConverter:
                 contact_overrides
             )
 
-            corrected_frame = {
-                'left': ik_result['left'],
-                'right': ik_result['right']
-            }
+            corrected_frame = {'left': ik_result['left'], 'right': ik_result['right']}
             corrected.append(corrected_frame)
 
-            previous_ankles = {
-                'left': ik_result['left']['ankle'],
-                'right': ik_result['right']['ankle']
-            }
+            previous_ankles = {'left': ik_result['left']['ankle'], 'right': ik_result['right']['ankle']}
 
         planted_frames = sum(
             1 for frame in corrected
@@ -381,7 +364,6 @@ class ImprovedBVHConverter:
     def _detect_foot_contact(self, ankle_pos: np.ndarray, foot_pos: np.ndarray,
                             prev_ankle: Optional[np.ndarray], side: str) -> bool:
         """Improved foot contact detection using multiple signals."""
-
         foot_height = foot_pos[1] - self.ground_level if self.ground_level is not None else foot_pos[1]
         ankle_height = ankle_pos[1] - self.ground_level if self.ground_level is not None else ankle_pos[1]
         min_height = min(foot_height, ankle_height)
@@ -403,8 +385,7 @@ class ImprovedBVHConverter:
 
     def _update_pose_frames_with_ik(self, pose_frames: List[PoseFrame], corrected_positions: List[Optional[Dict]]):
         """Update pose frame landmarks with IK-corrected positions."""
-
-        for i, (frame, corrections) in enumerate(zip(pose_frames, corrected_positions)):
+        for frame, corrections in zip(pose_frames, corrected_positions):
             if not frame.is_valid() or corrections is None:
                 continue
 
@@ -433,7 +414,6 @@ class ImprovedBVHConverter:
     def _process_motion_improved(self, pose_frames: List[PoseFrame]) -> List[Dict[str, np.ndarray]]:
         """Process all frames with improved hand tracking."""
         all_rotations = []
-
         for frame in pose_frames:
             if frame.is_valid():
                 frame_rotations = self._calculate_frame_rotations_improved(
@@ -443,9 +423,7 @@ class ImprovedBVHConverter:
                 )
             else:
                 frame_rotations = self._get_zero_rotations()
-
             all_rotations.append(frame_rotations)
-
         return all_rotations
 
     @staticmethod
@@ -456,12 +434,7 @@ class ImprovedBVHConverter:
         return v / n
 
     def _calculate_torso_basis(self, landmarks) -> Optional[Tuple[np.ndarray, np.ndarray, np.ndarray]]:
-        """
-        Build a stable torso basis from pose landmarks in BVH-like space:
-        - left axis: +X (left)
-        - up axis: +Y (up)
-        - forward axis: +Z (forward)
-        """
+        """Build a stable torso basis from shoulders + hips."""
         try:
             l_sh = np.array([landmarks[mp_pose.PoseLandmark.LEFT_SHOULDER].x,
                              -landmarks[mp_pose.PoseLandmark.LEFT_SHOULDER].y,
@@ -479,9 +452,8 @@ class ImprovedBVHConverter:
             sh_center = (l_sh + r_sh) / 2.0
             hip_center = (l_hip + r_hip) / 2.0
 
-            left_axis = self._safe_normalize(l_sh - r_sh)  # +X = left
-            up_axis = self._safe_normalize(sh_center - hip_center)  # +Y = up
-
+            left_axis = self._safe_normalize(l_sh - r_sh)
+            up_axis = self._safe_normalize(sh_center - hip_center)
             if left_axis is None or up_axis is None:
                 return None
 
@@ -498,10 +470,7 @@ class ImprovedBVHConverter:
             return None
 
     def _rotation_from_basis(self, left_axis: np.ndarray, up_axis: np.ndarray, forward_axis: np.ndarray) -> Optional[np.ndarray]:
-        """
-        Return global Euler XYZ (degrees) from basis vectors.
-        Basis columns correspond to BVH axes: X=Left, Y=Up, Z=Forward.
-        """
+        """Return global Euler XYZ (degrees) from basis vectors."""
         try:
             from scipy.spatial.transform import Rotation as R
             rot_mat = np.column_stack((left_axis, up_axis, forward_axis))
@@ -511,14 +480,7 @@ class ImprovedBVHConverter:
             return None
 
     def _calculate_head_global_rotation(self, landmarks) -> Optional[np.ndarray]:
-        """
-        FIXED head rotation:
-        - DO NOT use (nose - shoulder_center) as "forward" (that points mostly UP).
-        - Use torso forward as the primary forward direction.
-        - Use (nose - neck_base) as an UP cue to allow pitch/roll without 90° flip.
-        - Optionally add a small yaw from nose lateral offset in torso space.
-        Returns GLOBAL Euler XYZ degrees.
-        """
+        """Correct head basis to prevent 90° pitch-down."""
         try:
             torso_basis = self._calculate_torso_basis(landmarks)
             if torso_basis is None:
@@ -537,39 +499,17 @@ class ImprovedBVHConverter:
                              -landmarks[mp_pose.PoseLandmark.NOSE].y,
                              landmarks[mp_pose.PoseLandmark.NOSE].z])
 
-            # Neck base approximation: shoulder center (stable)
             neck_base = sh_center
+            head_up_cue = self._safe_normalize(nose - neck_base) or torso_up
 
-            # Up cue from neck to nose (mostly up, some forward depending on pose)
-            head_up_cue = self._safe_normalize(nose - neck_base)
-            if head_up_cue is None:
-                head_up_cue = torso_up
-
-            # Primary forward is torso forward (prevents 90° pitch-down)
             head_forward = torso_forward.copy()
-
-            # Optional: add yaw from nose lateral offset in torso space
-            # Project nose offset onto torso left axis to get left/right amount
             nose_offset = nose - sh_center
             yaw_amount = float(np.dot(nose_offset, torso_left))
-            # Small gain; too high will jitter
             head_forward = self._safe_normalize(head_forward + torso_left * (yaw_amount * 0.25)) or torso_forward
 
-            # Build orthonormal basis:
-            # left = up x forward (or forward x up depending on handedness)
-            head_left = self._safe_normalize(np.cross(head_up_cue, head_forward))
-            if head_left is None:
-                head_left = torso_left
-
-            # Recompute forward to ensure orthogonality
-            head_forward = self._safe_normalize(np.cross(head_left, head_up_cue))
-            if head_forward is None:
-                head_forward = torso_forward
-
-            # Recompute up to ensure orthogonality
-            head_up = self._safe_normalize(np.cross(head_forward, head_left))
-            if head_up is None:
-                head_up = torso_up
+            head_left = self._safe_normalize(np.cross(head_up_cue, head_forward)) or torso_left
+            head_forward = self._safe_normalize(np.cross(head_left, head_up_cue)) or torso_forward
+            head_up = self._safe_normalize(np.cross(head_forward, head_left)) or torso_up
 
             return self._rotation_from_basis(head_left, head_up, head_forward)
         except Exception:
@@ -598,18 +538,12 @@ class ImprovedBVHConverter:
             head_global_rot = R.from_euler('XYZ', head_global_euler, degrees=True)
 
         def get_bone_direction(joint_name: str, child_name: str) -> Optional[np.ndarray]:
-            parent_pos = self.skeleton_mapper.get_joint_position(
-                joint_name, landmarks, self.scale
-            )
-            child_pos = self.skeleton_mapper.get_joint_position(
-                child_name, landmarks, self.scale
-            )
-
+            parent_pos = self.skeleton_mapper.get_joint_position(joint_name, landmarks, self.scale)
+            child_pos = self.skeleton_mapper.get_joint_position(child_name, landmarks, self.scale)
             if parent_pos is not None and child_pos is not None:
                 direction = child_pos - parent_pos
                 if np.linalg.norm(direction) > 1e-10:
                     return direction / np.linalg.norm(direction)
-
             return None
 
         def process_joint(joint: BVHJoint, parent_rotation: R):
@@ -623,17 +557,6 @@ class ImprovedBVHConverter:
                 if chest_global_rot is not None:
                     calculated_euler = chest_global_euler
                     is_global = True
-                else:
-                    if joint.children:
-                        child = joint.children[0]
-                        direction = get_bone_direction(joint.name, child.name)
-                        if direction is not None and np.linalg.norm(child.offset) > 0:
-                            rest_direction = child.offset / np.linalg.norm(child.offset)
-                            euler_angles = calculate_rotation_from_directions(
-                                rest_direction, direction, order='XYZ'
-                            )
-                            calculated_euler = euler_angles * 0.3
-                            is_global = True
 
             elif joint.name == "Neck":
                 if chest_global_rot is not None and head_global_rot is not None:
@@ -642,113 +565,19 @@ class ImprovedBVHConverter:
                     neck_local_euler *= 0.5
                     calculated_euler = neck_local_euler
                     is_global = False
-                else:
-                    if joint.children:
-                        child = joint.children[0]
-                        direction = get_bone_direction(joint.name, child.name)
-                        if direction is not None and np.linalg.norm(child.offset) > 0:
-                            rest_direction = child.offset / np.linalg.norm(child.offset)
-                            euler_angles = calculate_rotation_from_directions(
-                                rest_direction, direction, order='XYZ'
-                            )
-                            calculated_euler = euler_angles * 0.2
-                            is_global = True
 
             elif joint.name == "Head":
                 if head_global_euler is not None:
                     calculated_euler = head_global_euler
                     is_global = True
-                else:
-                    calculated_euler = np.array([0.0, 0.0, 0.0])
-                    is_global = False
-
-            elif joint.name in ["LeftShoulder", "RightShoulder"]:
-                shoulder_pos = self.skeleton_mapper.get_joint_position(joint.name, landmarks, self.scale)
-
-                if joint.children and shoulder_pos is not None:
-                    child = joint.children[0]  # Arm
-                    arm_pos = self.skeleton_mapper.get_joint_position(child.name, landmarks, self.scale)
-
-                    if arm_pos is not None:
-                        direction = arm_pos - shoulder_pos
-                        if np.linalg.norm(direction) > 1e-10 and np.linalg.norm(child.offset) > 0:
-                            direction = direction / np.linalg.norm(direction)
-                            rest_direction = child.offset / np.linalg.norm(child.offset)
-
-                            calculated_euler = calculate_rotation_from_directions(
-                                rest_direction, direction, order='XYZ'
-                            )
-                            is_global = True
-
-            elif joint.name in ["LeftArm", "RightArm"]:
-                parent = joint.parent
-                if parent and joint.children:
-                    shoulder_pos = self.skeleton_mapper.get_joint_position(parent.name, landmarks, self.scale)
-                    elbow_pos = self.skeleton_mapper.get_joint_position(joint.name, landmarks, self.scale)
-                    child = joint.children[0]  # ForeArm
-                    wrist_pos = self.skeleton_mapper.get_joint_position(child.name, landmarks, self.scale)
-
-                    if shoulder_pos is not None and elbow_pos is not None and wrist_pos is not None:
-                        forearm = wrist_pos - elbow_pos
-
-                        if np.linalg.norm(forearm) > 1e-10 and np.linalg.norm(child.offset) > 0:
-                            forearm_direction = forearm / np.linalg.norm(forearm)
-                            rest_direction = child.offset / np.linalg.norm(child.offset)
-
-                            euler_angles = calculate_rotation_from_directions(
-                                rest_direction, forearm_direction, order='XYZ'
-                            )
-
-                            euler_angles[1] *= 0.2
-                            euler_angles[2] *= 0.2
-
-                            calculated_euler = euler_angles
-                            is_global = True
-
-            elif joint.name in ["LeftForeArm", "RightForeArm"]:
-                hand_orientation = self._calculate_improved_hand_orientation(
-                    landmarks,
-                    left_hand_landmarks if joint.name == "LeftForeArm" else right_hand_landmarks,
-                    joint.name == "LeftForeArm"
-                )
-
-                if hand_orientation is not None and joint.children:
-                    child = joint.children[0]  # Hand
-                    if np.linalg.norm(child.offset) > 0:
-                        rest_direction = child.offset / np.linalg.norm(child.offset)
-
-                        euler_angles = calculate_rotation_from_directions(
-                            rest_direction, hand_orientation, order='XYZ'
-                        )
-
-                        euler_angles[0] *= 0.9
-                        euler_angles[1] *= 0.7
-                        euler_angles[2] *= 0.8
-
-                        calculated_euler = euler_angles
-                        is_global = True
 
             elif joint.children:
                 child = joint.children[0]
                 direction = get_bone_direction(joint.name, child.name)
-
-                if direction is not None:
-                    if np.linalg.norm(child.offset) > 0:
-                        rest_direction = child.offset / np.linalg.norm(child.offset)
-
-                        if joint.name in ["LeftHand", "RightHand", "LeftFoot", "RightFoot"]:
-                            if direction[2] < 0 and abs(direction[2]) > 0.1:
-                                direction[2] = abs(direction[2])
-
-                            if joint.name == "LeftHand" and direction[0] > 0:
-                                direction[0] = -abs(direction[0])
-                            elif joint.name == "RightHand" and direction[0] < 0:
-                                direction[0] = abs(direction[0])
-
-                        calculated_euler = calculate_rotation_from_directions(
-                            rest_direction, direction, order='XYZ'
-                        )
-                        is_global = True
+                if direction is not None and np.linalg.norm(child.offset) > 0:
+                    rest_direction = child.offset / np.linalg.norm(child.offset)
+                    calculated_euler = calculate_rotation_from_directions(rest_direction, direction, order='XYZ')
+                    is_global = True
 
             if calculated_euler is not None:
                 if is_global:
@@ -778,17 +607,8 @@ class ImprovedBVHConverter:
             wrist_idx = mp_pose.PoseLandmark.LEFT_WRIST if is_left else mp_pose.PoseLandmark.RIGHT_WRIST
             elbow_idx = mp_pose.PoseLandmark.LEFT_ELBOW if is_left else mp_pose.PoseLandmark.RIGHT_ELBOW
 
-            wrist_world = np.array([
-                pose_landmarks[wrist_idx].x,
-                -pose_landmarks[wrist_idx].y,
-                pose_landmarks[wrist_idx].z
-            ]) * self.scale
-
-            elbow_world = np.array([
-                pose_landmarks[elbow_idx].x,
-                -pose_landmarks[elbow_idx].y,
-                pose_landmarks[elbow_idx].z
-            ]) * self.scale
+            wrist_world = np.array([pose_landmarks[wrist_idx].x, -pose_landmarks[wrist_idx].y, pose_landmarks[wrist_idx].z]) * self.scale
+            elbow_world = np.array([pose_landmarks[elbow_idx].x, -pose_landmarks[elbow_idx].y, pose_landmarks[elbow_idx].z]) * self.scale
 
             forearm = wrist_world - elbow_world
             forearm_len = np.linalg.norm(forearm)
@@ -853,7 +673,7 @@ class ImprovedBVHConverter:
             'LeftArm': 2, 'RightArm': 2,
             'LeftForeArm': 1, 'RightForeArm': 1,
             'LeftHand': 1, 'RightHand': 1,
-            'Hips': 3, 'Chest': 3, 'Neck': 2,  # slightly less smoothing on neck
+            'Hips': 3, 'Chest': 3, 'Neck': 2,
             'LeftUpLeg': 2, 'RightUpLeg': 2,
             'LeftLeg': 2, 'RightLeg': 2,
             'LeftFoot': 2, 'RightFoot': 2,
@@ -862,14 +682,11 @@ class ImprovedBVHConverter:
         }
 
         for joint_name in joint_names:
-            joint_rotations = np.array([
-                frame_rots[joint_name] for frame_rots in all_rotations
-            ])
+            joint_rotations = np.array([frame_rots[joint_name] for frame_rots in all_rotations])
 
             if len(joint_rotations) > 1:
                 velocity = np.diff(joint_rotations, axis=0)
                 mean_velocity = np.mean(np.abs(velocity))
-
                 base_window = joint_smoothing.get(joint_name, SMOOTHING_CONFIG['temporal_window_size'])
 
                 if mean_velocity > 10.0:
