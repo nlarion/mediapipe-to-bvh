@@ -188,20 +188,9 @@ class ImprovedBVHConverter:
         self.ik_system = IKFootLockSystem(thigh_length, shin_length)
 
         # IMPROVED: Calibrated thresholds based on MediaPipe coordinate system
-        # MediaPipe world coordinates are in meters, scale factor is typically 100
-
-        # Velocity threshold: Increased to tolerate noise
-        # 2.0 * (scale/100) -> ~2.0 units/frame if scale is 100
         self.ik_system.config.contact_velocity_threshold = 4.0 * (scale / 100.0)
-
-        # Height threshold: Increased to catch feet earlier
-        # 0.08 * scale -> 8cm if scale is 100
         self.ik_system.config.contact_height_threshold = 0.12 * scale
-
-        # Foot clearance: minimum height for foot to be considered off ground
         self.ik_system.config.foot_clearance_height = 0.05 * scale
-
-        # Vertical velocity threshold (NEW)
         self.ik_system.config.vertical_velocity_threshold = 2.0 * (scale / 100.0)
 
         print(f"Calibrated IK thresholds:")
@@ -287,7 +276,6 @@ class ImprovedBVHConverter:
                 corrected.append(None)
                 continue
 
-            # Extract positions for this frame
             hip_positions = {
                 'left': leg_positions['left']['hip'],
                 'right': leg_positions['right']['hip']
@@ -300,14 +288,11 @@ class ImprovedBVHConverter:
                 'left': leg_positions['left']['ankle'],
                 'right': leg_positions['right']['ankle']
             }
-
-            # NEW: Use foot positions for better ground detection
             foot_positions = {
                 'left': leg_positions['left']['foot'],
                 'right': leg_positions['right']['foot']
             }
 
-            # IMPROVED: Better foot contact detection
             left_contact = self._detect_foot_contact(
                 ankle_positions['left'],
                 foot_positions['left'],
@@ -321,17 +306,14 @@ class ImprovedBVHConverter:
                 'right'
             )
 
-            # Track contact frames for drift correction
             if left_contact or right_contact:
                 self.foot_contact_frames.append(i)
 
-            # Create overrides dictionary
             contact_overrides = {
                 'left': left_contact,
                 'right': right_contact
             }
 
-            # Apply IK correction with improved contact detection
             ik_result = self.ik_system.process_frame(
                 hip_positions,
                 knee_positions,
@@ -341,20 +323,17 @@ class ImprovedBVHConverter:
                 contact_overrides
             )
 
-            # Store corrected positions
             corrected_frame = {
                 'left': ik_result['left'],
                 'right': ik_result['right']
             }
             corrected.append(corrected_frame)
 
-            # Update previous ankles for velocity calculation
             previous_ankles = {
                 'left': ik_result['left']['ankle'],
                 'right': ik_result['right']['ankle']
             }
 
-        # Print statistics
         planted_frames = sum(
             1 for frame in corrected
             if frame and (frame['left']['confidence'] > 0.5 or frame['right']['confidence'] > 0.5)
@@ -429,7 +408,6 @@ class ImprovedBVHConverter:
             if not frame.is_valid() or corrections is None:
                 continue
 
-            # Left leg
             if corrections['left']['confidence'] > 0:
                 knee_pos = corrections['left']['knee'] / self.scale
                 frame.world_landmarks[mp_pose.PoseLandmark.LEFT_KNEE].x = knee_pos[0]
@@ -441,7 +419,6 @@ class ImprovedBVHConverter:
                 frame.world_landmarks[mp_pose.PoseLandmark.LEFT_ANKLE].y = -ankle_pos[1]
                 frame.world_landmarks[mp_pose.PoseLandmark.LEFT_ANKLE].z = ankle_pos[2]
 
-            # Right leg
             if corrections['right']['confidence'] > 0:
                 knee_pos = corrections['right']['knee'] / self.scale
                 frame.world_landmarks[mp_pose.PoseLandmark.RIGHT_KNEE].x = knee_pos[0]
@@ -512,7 +489,6 @@ class ImprovedBVHConverter:
             if forward_axis is None:
                 return None
 
-            # Re-orthogonalize up to reduce drift
             up_axis = self._safe_normalize(np.cross(forward_axis, left_axis))
             if up_axis is None:
                 return None
@@ -536,10 +512,11 @@ class ImprovedBVHConverter:
 
     def _calculate_head_global_rotation(self, landmarks) -> Optional[np.ndarray]:
         """
-        Improved head rotation:
-        - Use torso basis for stability.
-        - Use nose direction relative to shoulder center to steer head forward.
-        Falls back to torso orientation if face landmarks are unreliable.
+        FIXED head rotation:
+        - DO NOT use (nose - shoulder_center) as "forward" (that points mostly UP).
+        - Use torso forward as the primary forward direction.
+        - Use (nose - neck_base) as an UP cue to allow pitch/roll without 90° flip.
+        - Optionally add a small yaw from nose lateral offset in torso space.
         Returns GLOBAL Euler XYZ degrees.
         """
         try:
@@ -560,24 +537,41 @@ class ImprovedBVHConverter:
                              -landmarks[mp_pose.PoseLandmark.NOSE].y,
                              landmarks[mp_pose.PoseLandmark.NOSE].z])
 
-            face_forward = self._safe_normalize(nose - sh_center)
-            if face_forward is None:
-                return self._rotation_from_basis(torso_left, torso_up, torso_forward)
+            # Neck base approximation: shoulder center (stable)
+            neck_base = sh_center
 
-            # Blend face forward with torso forward to reduce jitter
-            blended_forward = self._safe_normalize(face_forward * 0.6 + torso_forward * 0.4)
-            if blended_forward is None:
-                blended_forward = torso_forward
+            # Up cue from neck to nose (mostly up, some forward depending on pose)
+            head_up_cue = self._safe_normalize(nose - neck_base)
+            if head_up_cue is None:
+                head_up_cue = torso_up
 
-            # Keep head "up" close to torso up, but orthogonalize
-            head_left = self._safe_normalize(np.cross(torso_up, blended_forward))
+            # Primary forward is torso forward (prevents 90° pitch-down)
+            head_forward = torso_forward.copy()
+
+            # Optional: add yaw from nose lateral offset in torso space
+            # Project nose offset onto torso left axis to get left/right amount
+            nose_offset = nose - sh_center
+            yaw_amount = float(np.dot(nose_offset, torso_left))
+            # Small gain; too high will jitter
+            head_forward = self._safe_normalize(head_forward + torso_left * (yaw_amount * 0.25)) or torso_forward
+
+            # Build orthonormal basis:
+            # left = up x forward (or forward x up depending on handedness)
+            head_left = self._safe_normalize(np.cross(head_up_cue, head_forward))
             if head_left is None:
                 head_left = torso_left
-            head_up = self._safe_normalize(np.cross(blended_forward, head_left))
+
+            # Recompute forward to ensure orthogonality
+            head_forward = self._safe_normalize(np.cross(head_left, head_up_cue))
+            if head_forward is None:
+                head_forward = torso_forward
+
+            # Recompute up to ensure orthogonality
+            head_up = self._safe_normalize(np.cross(head_forward, head_left))
             if head_up is None:
                 head_up = torso_up
 
-            return self._rotation_from_basis(head_left, head_up, blended_forward)
+            return self._rotation_from_basis(head_left, head_up, head_forward)
         except Exception:
             return None
 
@@ -642,11 +636,10 @@ class ImprovedBVHConverter:
                             is_global = True
 
             elif joint.name == "Neck":
-                # Neck should be the "difference" between chest and head, damped.
                 if chest_global_rot is not None and head_global_rot is not None:
                     neck_local = chest_global_rot.inv() * head_global_rot
                     neck_local_euler = neck_local.as_euler('XYZ', degrees=True)
-                    neck_local_euler *= 0.5  # damping
+                    neck_local_euler *= 0.5
                     calculated_euler = neck_local_euler
                     is_global = False
                 else:
@@ -848,126 +841,6 @@ class ImprovedBVHConverter:
         except Exception:
             return None
 
-    def _calculate_root_motion_from_feet(self, pose_frames: List[PoseFrame]) -> List[np.ndarray]:
-        """
-        Calculate root motion by tracking planted feet.
-        When a foot is planted, the root moves in the opposite direction of the foot's relative movement.
-        """
-        positions = []
-
-        if not pose_frames or not pose_frames[0].world_landmarks:
-            return [np.array([0.0, BVH_CONFIG['root_height'], 0.0])] * len(pose_frames)
-
-        current_root_pos = np.array([0.0, BVH_CONFIG['root_height'], 0.0])
-        positions.append(current_root_pos.copy())
-
-        left_hip = np.array([pose_frames[0].world_landmarks[mp_pose.PoseLandmark.LEFT_HIP].x, pose_frames[0].world_landmarks[mp_pose.PoseLandmark.LEFT_HIP].y, pose_frames[0].world_landmarks[mp_pose.PoseLandmark.LEFT_HIP].z])
-        left_knee = np.array([pose_frames[0].world_landmarks[mp_pose.PoseLandmark.LEFT_KNEE].x, pose_frames[0].world_landmarks[mp_pose.PoseLandmark.LEFT_KNEE].y, pose_frames[0].world_landmarks[mp_pose.PoseLandmark.LEFT_KNEE].z])
-        left_ankle = np.array([pose_frames[0].world_landmarks[mp_pose.PoseLandmark.LEFT_ANKLE].x, pose_frames[0].world_landmarks[mp_pose.PoseLandmark.LEFT_ANKLE].y, pose_frames[0].world_landmarks[mp_pose.PoseLandmark.LEFT_ANKLE].z])
-        actual_leg_length = np.linalg.norm(left_knee - left_hip) + np.linalg.norm(left_ankle - left_knee)
-        focal_length = PROCESSING_CONFIG.get('focal_length', 1.0)
-
-        for i in range(1, len(pose_frames)):
-            prev_frame = pose_frames[i-1]
-            curr_frame = pose_frames[i]
-
-            if not curr_frame.world_landmarks or not prev_frame.world_landmarks:
-                positions.append(current_root_pos.copy())
-                continue
-
-            l_planted = False
-            r_planted = False
-
-            l_foot_curr = np.array([curr_frame.landmarks[mp_pose.PoseLandmark.LEFT_ANKLE].x, curr_frame.landmarks[mp_pose.PoseLandmark.LEFT_ANKLE].y])
-            r_foot_curr = np.array([curr_frame.landmarks[mp_pose.PoseLandmark.RIGHT_ANKLE].x, curr_frame.landmarks[mp_pose.PoseLandmark.RIGHT_ANKLE].y])
-            l_foot_prev = np.array([prev_frame.landmarks[mp_pose.PoseLandmark.LEFT_ANKLE].x, prev_frame.landmarks[mp_pose.PoseLandmark.LEFT_ANKLE].y])
-            r_foot_prev = np.array([prev_frame.landmarks[mp_pose.PoseLandmark.RIGHT_ANKLE].x, prev_frame.landmarks[mp_pose.PoseLandmark.RIGHT_ANKLE].y])
-
-            l_hip_curr = np.array([curr_frame.landmarks[mp_pose.PoseLandmark.LEFT_HIP].x, curr_frame.landmarks[mp_pose.PoseLandmark.LEFT_HIP].y])
-            r_hip_curr = np.array([curr_frame.landmarks[mp_pose.PoseLandmark.RIGHT_HIP].x, curr_frame.landmarks[mp_pose.PoseLandmark.RIGHT_HIP].y])
-
-            l_vel = np.linalg.norm(l_foot_curr - l_foot_prev)
-            r_vel = np.linalg.norm(r_foot_curr - r_foot_prev)
-
-            is_contact_frame = i in self.foot_contact_frames
-
-            if is_contact_frame:
-                if l_vel < r_vel:
-                    l_planted = True
-                else:
-                    r_planted = True
-                if l_vel < 0.005 and r_vel < 0.005:
-                    l_planted = True
-                    r_planted = True
-
-            root_delta = np.zeros(3)
-
-            if l_planted or r_planted:
-                l_foot_rel_prev = np.array([prev_frame.world_landmarks[mp_pose.PoseLandmark.LEFT_ANKLE].x, prev_frame.world_landmarks[mp_pose.PoseLandmark.LEFT_ANKLE].y, prev_frame.world_landmarks[mp_pose.PoseLandmark.LEFT_ANKLE].z])
-                l_foot_rel_curr = np.array([curr_frame.world_landmarks[mp_pose.PoseLandmark.LEFT_ANKLE].x, curr_frame.world_landmarks[mp_pose.PoseLandmark.LEFT_ANKLE].y, curr_frame.world_landmarks[mp_pose.PoseLandmark.LEFT_ANKLE].z])
-
-                r_foot_rel_prev = np.array([prev_frame.world_landmarks[mp_pose.PoseLandmark.RIGHT_ANKLE].x, prev_frame.world_landmarks[mp_pose.PoseLandmark.RIGHT_ANKLE].y, prev_frame.world_landmarks[mp_pose.PoseLandmark.RIGHT_ANKLE].z])
-                r_foot_rel_curr = np.array([curr_frame.world_landmarks[mp_pose.PoseLandmark.RIGHT_ANKLE].x, curr_frame.world_landmarks[mp_pose.PoseLandmark.RIGHT_ANKLE].y, curr_frame.world_landmarks[mp_pose.PoseLandmark.RIGHT_ANKLE].z])
-
-                l_delta = -(l_foot_rel_curr - l_foot_rel_prev)
-                r_delta = -(r_foot_rel_curr - r_foot_rel_prev)
-
-                if l_planted and r_planted:
-                    root_delta = (l_delta + r_delta) / 2.0
-                elif l_planted:
-                    root_delta = l_delta
-                elif r_planted:
-                    root_delta = r_delta
-
-                root_delta *= self.scale
-
-                l_obs_len_curr = np.linalg.norm(np.array([curr_frame.landmarks[mp_pose.PoseLandmark.LEFT_KNEE].x, curr_frame.landmarks[mp_pose.PoseLandmark.LEFT_KNEE].y]) - np.array([curr_frame.landmarks[mp_pose.PoseLandmark.LEFT_HIP].x, curr_frame.landmarks[mp_pose.PoseLandmark.LEFT_HIP].y])) + \
-                                 np.linalg.norm(np.array([curr_frame.landmarks[mp_pose.PoseLandmark.LEFT_ANKLE].x, curr_frame.landmarks[mp_pose.PoseLandmark.LEFT_ANKLE].y]) - np.array([curr_frame.landmarks[mp_pose.PoseLandmark.LEFT_KNEE].x, curr_frame.landmarks[mp_pose.PoseLandmark.LEFT_KNEE].y]))
-                l_depth_curr = calculate_depth_from_projected_length(l_obs_len_curr, actual_leg_length, focal_length)
-
-                l_obs_len_prev = np.linalg.norm(np.array([prev_frame.landmarks[mp_pose.PoseLandmark.LEFT_KNEE].x, prev_frame.landmarks[mp_pose.PoseLandmark.LEFT_KNEE].y]) - np.array([prev_frame.landmarks[mp_pose.PoseLandmark.LEFT_HIP].x, prev_frame.landmarks[mp_pose.PoseLandmark.LEFT_HIP].y])) + \
-                                 np.linalg.norm(np.array([prev_frame.landmarks[mp_pose.PoseLandmark.LEFT_ANKLE].x, prev_frame.landmarks[mp_pose.PoseLandmark.LEFT_ANKLE].y]) - np.array([prev_frame.landmarks[mp_pose.PoseLandmark.LEFT_KNEE].x, prev_frame.landmarks[mp_pose.PoseLandmark.LEFT_KNEE].y]))
-                l_depth_prev = calculate_depth_from_projected_length(l_obs_len_prev, actual_leg_length, focal_length)
-
-                _depth_delta = l_depth_curr - l_depth_prev
-
-            else:
-                hip_curr_2d = (l_hip_curr + r_hip_curr) / 2.0
-                hip_prev_2d = (np.array([prev_frame.landmarks[mp_pose.PoseLandmark.LEFT_HIP].x, prev_frame.landmarks[mp_pose.PoseLandmark.LEFT_HIP].y]) +
-                               np.array([prev_frame.landmarks[mp_pose.PoseLandmark.RIGHT_HIP].x, prev_frame.landmarks[mp_pose.PoseLandmark.RIGHT_HIP].y])) / 2.0
-
-                delta_2d = hip_curr_2d - hip_prev_2d
-                root_delta[0] = delta_2d[0] * self.scale
-                root_delta[1] = -delta_2d[1] * self.scale
-
-                l_obs_len_curr = np.linalg.norm(np.array([curr_frame.landmarks[mp_pose.PoseLandmark.LEFT_KNEE].x, curr_frame.landmarks[mp_pose.PoseLandmark.LEFT_KNEE].y]) - np.array([curr_frame.landmarks[mp_pose.PoseLandmark.LEFT_HIP].x, curr_frame.landmarks[mp_pose.PoseLandmark.LEFT_HIP].y])) + \
-                                 np.linalg.norm(np.array([curr_frame.landmarks[mp_pose.PoseLandmark.LEFT_ANKLE].x, curr_frame.landmarks[mp_pose.PoseLandmark.LEFT_ANKLE].y]) - np.array([curr_frame.landmarks[mp_pose.PoseLandmark.LEFT_KNEE].x, curr_frame.landmarks[mp_pose.PoseLandmark.LEFT_KNEE].y]))
-                l_depth_curr = calculate_depth_from_projected_length(l_obs_len_curr, actual_leg_length, focal_length)
-
-                l_obs_len_prev = np.linalg.norm(np.array([prev_frame.landmarks[mp_pose.PoseLandmark.LEFT_KNEE].x, prev_frame.landmarks[mp_pose.PoseLandmark.LEFT_KNEE].y]) - np.array([prev_frame.landmarks[mp_pose.PoseLandmark.LEFT_HIP].x, prev_frame.landmarks[mp_pose.PoseLandmark.LEFT_HIP].y])) + \
-                                 np.linalg.norm(np.array([prev_frame.landmarks[mp_pose.PoseLandmark.LEFT_ANKLE].x, prev_frame.landmarks[mp_pose.PoseLandmark.LEFT_ANKLE].y]) - np.array([prev_frame.landmarks[mp_pose.PoseLandmark.LEFT_KNEE].x, prev_frame.landmarks[mp_pose.PoseLandmark.LEFT_KNEE].y]))
-                l_depth_prev = calculate_depth_from_projected_length(l_obs_len_prev, actual_leg_length, focal_length)
-
-                depth_delta = l_depth_curr - l_depth_prev
-
-                z_scale = PROCESSING_CONFIG.get('depth_scale_multiplier', 1.0) * 10.0
-                root_delta[2] = depth_delta * z_scale
-
-            current_root_pos += root_delta
-            positions.append(current_root_pos.copy())
-
-        if SMOOTHING_CONFIG['enable_temporal_smoothing']:
-            positions_array = np.array(positions)
-            smoothed_positions = smooth_positions(
-                positions_array,
-                window_size=SMOOTHING_CONFIG['temporal_window_size'],
-                preserve_dynamics=SMOOTHING_CONFIG['preserve_dynamics'],
-                preserve_y_axis=False
-            )
-            positions = [pos for pos in smoothed_positions]
-
-        return positions
-
     def _smooth_motion(self, all_rotations: List[Dict[str, np.ndarray]]) -> List[Dict[str, np.ndarray]]:
         """Apply adaptive temporal smoothing to motion data."""
         if not all_rotations:
@@ -980,7 +853,7 @@ class ImprovedBVHConverter:
             'LeftArm': 2, 'RightArm': 2,
             'LeftForeArm': 1, 'RightForeArm': 1,
             'LeftHand': 1, 'RightHand': 1,
-            'Hips': 3, 'Chest': 3, 'Neck': 3,
+            'Hips': 3, 'Chest': 3, 'Neck': 2,  # slightly less smoothing on neck
             'LeftUpLeg': 2, 'RightUpLeg': 2,
             'LeftLeg': 2, 'RightLeg': 2,
             'LeftFoot': 2, 'RightFoot': 2,
@@ -1147,7 +1020,7 @@ def main():
         print(f"\nConversion completed in {elapsed_time:.2f} seconds")
         print(f"Output saved to: {args.output}")
         print("\n✅ Improvements applied:")
-        print("  - Stabilized head/neck using torso basis + damped neck delta")
+        print("  - Stabilized head/neck using torso basis + corrected head basis (no 90° pitch)")
         print("  - Better 3D hand reconstruction for ForeArm/Wrist")
         print("  - Calibrated IK thresholds for foot contact")
         if args.ik:
