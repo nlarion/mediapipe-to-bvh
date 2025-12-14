@@ -1,1 +1,1 @@
-<entire file content here>
+<PASTE THE ENTIRE CURRENT CONTENTS OF bvh_converter.py HERE>
