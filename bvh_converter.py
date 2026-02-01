@@ -378,7 +378,14 @@ class ImprovedBVHConverter:
             return None
         return v / n
 
-    def _calculate_torso_basis(self, landmarks) -> Optional[Tuple[np.ndarray, np.ndarray, np.ndarray]]:
+    def _calculate_torso_basis(self, landmarks, level_shoulders: bool = True) -> Optional[Tuple[np.ndarray, np.ndarray, np.ndarray]]:
+        """
+        Calculate torso orientation basis vectors.
+
+        Args:
+            landmarks: MediaPipe pose landmarks
+            level_shoulders: If True, level the shoulders to reduce asymmetry from noise
+        """
         try:
             l_sh = np.array([landmarks[mp_pose.PoseLandmark.LEFT_SHOULDER].x,
                              -landmarks[mp_pose.PoseLandmark.LEFT_SHOULDER].y,
@@ -392,6 +399,18 @@ class ImprovedBVHConverter:
             r_hip = np.array([landmarks[mp_pose.PoseLandmark.RIGHT_HIP].x,
                               -landmarks[mp_pose.PoseLandmark.RIGHT_HIP].y,
                               landmarks[mp_pose.PoseLandmark.RIGHT_HIP].z])
+
+            # Level shoulders to reduce noise-induced asymmetry
+            if level_shoulders:
+                # Average the Y (height) of shoulders to make them level
+                avg_shoulder_y = (l_sh[1] + r_sh[1]) / 2.0
+                l_sh[1] = avg_shoulder_y
+                r_sh[1] = avg_shoulder_y
+
+                # Also level the hips
+                avg_hip_y = (l_hip[1] + r_hip[1]) / 2.0
+                l_hip[1] = avg_hip_y
+                r_hip[1] = avg_hip_y
 
             sh_center = (l_sh + r_sh) / 2.0
             hip_center = (l_hip + r_hip) / 2.0
@@ -494,7 +513,7 @@ class ImprovedBVHConverter:
                 head_global_euler = self._rotation_from_basis(*face_basis)
 
         if head_global_euler is None:
-            head_global_euler = self._calculate_head_global_rotation(landmarks)
+            head_global_euler = self._calculate_head_global_rotation(landmarks, torso_basis)
             if head_global_euler is not None:
                 head_global_euler = self._clamp_head_pitch(head_global_euler, -45.0, 45.0)
 
@@ -502,6 +521,8 @@ class ImprovedBVHConverter:
             head_global_rot = Rotation.from_euler('XYZ', head_global_euler, degrees=True)
 
         def get_bone_direction(joint_name: str, child_name: str) -> Optional[np.ndarray]:
+            # Use raw positions for rotation calculations
+            # (Shoulder leveling is applied in skeleton offsets, not rotations)
             parent_pos = self.skeleton_mapper.get_joint_position(joint_name, landmarks, self.scale)
             child_pos = self.skeleton_mapper.get_joint_position(child_name, landmarks, self.scale)
             if parent_pos is not None and child_pos is not None:
@@ -517,18 +538,18 @@ class ImprovedBVHConverter:
             calculated_euler = None
             is_global = False
 
-            if joint.name == "Chest" and chest_global_rot is not None:
+            if joint.name == "mixamorig:Spine2" and chest_global_rot is not None:
                 calculated_euler = chest_global_euler
                 is_global = True
 
-            elif joint.name == "Neck" and chest_global_rot is not None and head_global_rot is not None:
+            elif joint.name == "mixamorig:Neck" and chest_global_rot is not None and head_global_rot is not None:
                 neck_local = chest_global_rot.inv() * head_global_rot
                 neck_local_euler = neck_local.as_euler('XYZ', degrees=True)
                 neck_local_euler *= 0.5
                 calculated_euler = neck_local_euler
                 is_global = False
 
-            elif joint.name == "Head" and head_global_euler is not None:
+            elif joint.name == "mixamorig:Head" and head_global_euler is not None:
                 calculated_euler = head_global_euler
                 is_global = True
 
@@ -559,39 +580,49 @@ class ImprovedBVHConverter:
         process_joint(skeleton, Rotation.identity())
         return rotations
 
-    def _calculate_head_global_rotation(self, landmarks) -> Optional[np.ndarray]:
+    def _calculate_head_global_rotation(self, landmarks, torso_basis: Optional[Tuple[np.ndarray, np.ndarray, np.ndarray]] = None) -> Optional[np.ndarray]:
+        """
+        Simple head rotation from ear and nose landmarks.
+        Based on the original stable approach from commit 01ead91.
+        Returns GLOBAL Euler XYZ degrees.
+        """
         try:
-            torso_basis = self._calculate_torso_basis(landmarks)
-            if torso_basis is None:
+            nose_idx = mp_pose.PoseLandmark.NOSE
+            l_ear_idx = mp_pose.PoseLandmark.LEFT_EAR
+            r_ear_idx = mp_pose.PoseLandmark.RIGHT_EAR
+
+            nose = np.array([landmarks[nose_idx].x, -landmarks[nose_idx].y, landmarks[nose_idx].z])
+            l_ear = np.array([landmarks[l_ear_idx].x, -landmarks[l_ear_idx].y, landmarks[l_ear_idx].z])
+            r_ear = np.array([landmarks[r_ear_idx].x, -landmarks[r_ear_idx].y, landmarks[r_ear_idx].z])
+
+            # Right vector: Right Ear - Left Ear
+            right = self._safe_normalize(r_ear - l_ear)
+            if right is None:
                 return None
-            torso_left, torso_up, torso_forward = torso_basis
 
-            l_sh = np.array([landmarks[mp_pose.PoseLandmark.LEFT_SHOULDER].x,
-                             -landmarks[mp_pose.PoseLandmark.LEFT_SHOULDER].y,
-                             landmarks[mp_pose.PoseLandmark.LEFT_SHOULDER].z])
-            r_sh = np.array([landmarks[mp_pose.PoseLandmark.RIGHT_SHOULDER].x,
-                             -landmarks[mp_pose.PoseLandmark.RIGHT_SHOULDER].y,
-                             landmarks[mp_pose.PoseLandmark.RIGHT_SHOULDER].z])
-            sh_center = (l_sh + r_sh) / 2.0
+            # Forward vector: Mid(Ears) to Nose
+            mid_ears = (l_ear + r_ear) / 2.0
+            forward = self._safe_normalize(nose - mid_ears)
+            if forward is None:
+                return None
 
-            nose = np.array([landmarks[mp_pose.PoseLandmark.NOSE].x,
-                             -landmarks[mp_pose.PoseLandmark.NOSE].y,
-                             landmarks[mp_pose.PoseLandmark.NOSE].z])
+            # Up vector: Cross(Right, Forward)
+            up = self._safe_normalize(np.cross(right, forward))
+            if up is None:
+                return None
 
-            neck_base = sh_center
-            head_up_cue = self._safe_normalize(nose - neck_base) or torso_up
+            # Re-orthogonalize forward
+            forward = self._safe_normalize(np.cross(up, right))
+            if forward is None:
+                return None
 
-            head_forward = torso_forward.copy()
-            nose_offset = nose - sh_center
-            yaw_amount = float(np.dot(nose_offset, torso_left))
-            head_forward = self._safe_normalize(head_forward + torso_left * (yaw_amount * 0.25)) or torso_forward
+            # Left = -Right (for the rotation basis)
+            left = -right
 
-            head_left = self._safe_normalize(np.cross(head_up_cue, head_forward)) or torso_left
-            head_forward = self._safe_normalize(np.cross(head_left, head_up_cue)) or torso_forward
-            head_up = self._safe_normalize(np.cross(head_forward, head_left)) or torso_up
+            return self._rotation_from_basis(left, up, forward)
 
-            return self._rotation_from_basis(head_left, head_up, head_forward)
-        except Exception:
+        except Exception as e:
+            print(f"Error in head rotation calculation: {e}")
             return None
 
     def _smooth_motion(self, all_rotations: List[Dict[str, np.ndarray]]) -> List[Dict[str, np.ndarray]]:
@@ -602,7 +633,7 @@ class ImprovedBVHConverter:
         smoothed_rotations = [{} for _ in range(len(all_rotations))]
 
         joint_smoothing = {
-            'Hips': 3, 'Chest': 3, 'Neck': 2, 'Head': 2,
+            'mixamorig:Hips': 3, 'mixamorig:Spine2': 3, 'mixamorig:Neck': 2, 'mixamorig:Head': 2,
         }
 
         for joint_name in joint_names:

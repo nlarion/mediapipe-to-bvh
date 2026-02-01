@@ -1,60 +1,0 @@
-2025-11-20 23:18:26.041677: E external/local_xla/xla/stream_executor/cuda/cuda_dnn.cc:9261] Unable to register cuDNN factory: Attempting to register factory for plugin cuDNN when one has already been registered
-2025-11-20 23:18:26.041775: E external/local_xla/xla/stream_executor/cuda/cuda_fft.cc:607] Unable to register cuFFT factory: Attempting to register factory for plugin cuFFT when one has already been registered
-2025-11-20 23:18:26.042956: E external/local_xla/xla/stream_executor/cuda/cuda_blas.cc:1515] Unable to register cuBLAS factory: Attempting to register factory for plugin cuBLAS when one has already been registered
-2025-11-20 23:18:26.049573: I tensorflow/core/platform/cpu_feature_guard.cc:182] This TensorFlow binary is optimized to use available CPU instructions in performance-critical operations.
-To enable the following instructions: AVX2 FMA, in other operations, rebuild TensorFlow with the appropriate compiler flags.
-2025-11-20 23:18:27.099357: W tensorflow/compiler/tf2tensorrt/utils/py_utils.cc:38] TF-TRT Warning: Could not find TensorRT
-WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
-I0000 00:00:1763709508.952679  105223 gl_context_egl.cc:85] Successfully initialized EGL. Major : 1 Minor: 5
-I0000 00:00:1763709508.956614  105346 gl_context.cc:369] GL version: 3.2 (OpenGL ES 3.2 Mesa 22.3.6), renderer: Mesa Intel(R) HD Graphics 4600 (HSW GT2)
-INFO: Created TensorFlow Lite XNNPACK delegate for CPU.
-Starting verification on 1 videos...
-------------------------------------------------------------
-
-Processing fighter_001.mp4...
-Video properties: 1280x720, 24.0 FPS, 192 frames
-Sampling every 2 frames
-Extracting poses:   0%|          | 0/192 [00:00<?, ?it/s]W0000 00:00:1763709509.047917  105338 inference_feedback_manager.cc:114] Feedback manager requires a model with a single signature inference. Disabling support for feedback tensors.
-W0000 00:00:1763709509.080322  105343 inference_feedback_manager.cc:114] Feedback manager requires a model with a single signature inference. Disabling support for feedback tensors.
-W0000 00:00:1763709509.084513  105342 inference_feedback_manager.cc:114] Feedback manager requires a model with a single signature inference. Disabling support for feedback tensors.
-W0000 00:00:1763709509.085617  105337 inference_feedback_manager.cc:114] Feedback manager requires a model with a single signature inference. Disabling support for feedback tensors.
-W0000 00:00:1763709509.085798  105341 inference_feedback_manager.cc:114] Feedback manager requires a model with a single signature inference. Disabling support for feedback tensors.
-W0000 00:00:1763709509.103394  105339 inference_feedback_manager.cc:114] Feedback manager requires a model with a single signature inference. Disabling support for feedback tensors.
-W0000 00:00:1763709509.107936  105338 inference_feedback_manager.cc:114] Feedback manager requires a model with a single signature inference. Disabling support for feedback tensors.
-W0000 00:00:1763709509.110641  105341 inference_feedback_manager.cc:114] Feedback manager requires a model with a single signature inference. Disabling support for feedback tensors.
-W0000 00:00:1763709509.126069  105342 landmark_projection_calculator.cc:186] Using NORM_RECT without IMAGE_DIMENSIONS is only supported for the square ROI. Provide IMAGE_DIMENSIONS or use PROJECTION_MATRIX.
-Extracting poses:   1%|          | 1/192 [00:00<00:32,  5.81it/s]Extracting poses:   3%|▎         | 5/192 [00:00<00:10, 17.96it/s]Extracting poses:   5%|▍         | 9/192 [00:00<00:07, 23.85it/s]Extracting poses:   7%|▋         | 13/192 [00:00<00:06, 28.08it/s]Extracting poses:   9%|▉         | 17/192 [00:00<00:06, 27.56it/s]Extracting poses:  11%|█         | 21/192 [00:00<00:06, 27.85it/s]Extracting poses:  13%|█▎        | 25/192 [00:00<00:05, 28.89it/s]Extracting poses:  15%|█▌        | 29/192 [00:01<00:05, 30.43it/s]Extracting poses:  17%|█▋        | 33/192 [00:01<00:04, 32.07it/s]Extracting poses:  19%|█▉        | 37/192 [00:01<00:05, 30.06it/s]Extracting poses:  21%|██▏       | 41/192 [00:01<00:04, 31.61it/s]Extracting poses:  23%|██▎       | 45/192 [00:01<00:04, 33.10it/s]Extracting poses:  26%|██▌       | 49/192 [00:01<00:04, 31.14it/s]Extracting poses:  28%|██▊       | 53/192 [00:01<00:04, 32.10it/s]Extracting poses:  30%|██▉       | 57/192 [00:01<00:04, 30.87it/s]Extracting poses:  32%|███▏      | 61/192 [00:02<00:04, 29.41it/s]Extracting poses:  34%|███▍      | 65/192 [00:02<00:04, 27.82it/s]Extracting poses:  35%|███▌      | 68/192 [00:02<00:04, 27.48it/s]Extracting poses:  37%|███▋      | 71/192 [00:02<00:05, 21.92it/s]Extracting poses:  39%|███▉      | 75/192 [00:02<00:04, 23.65it/s]Extracting poses:  41%|████      | 79/192 [00:02<00:04, 24.63it/s]Extracting poses:  43%|████▎     | 83/192 [00:03<00:04, 25.84it/s]Extracting poses:  45%|████▌     | 87/192 [00:03<00:04, 24.85it/s]Extracting poses:  47%|████▋     | 91/192 [00:03<00:04, 25.16it/s]Extracting poses:  49%|████▉     | 95/192 [00:03<00:03, 25.90it/s]Extracting poses:  52%|█████▏    | 99/192 [00:03<00:03, 25.69it/s]Extracting poses:  54%|█████▎    | 103/192 [00:03<00:03, 25.64it/s]Extracting poses:  56%|█████▌    | 107/192 [00:03<00:03, 26.51it/s]Extracting poses:  58%|█████▊    | 111/192 [00:04<00:02, 27.20it/s]Extracting poses:  60%|█████▉    | 115/192 [00:04<00:02, 27.41it/s]Extracting poses:  62%|██████▏   | 119/192 [00:04<00:02, 27.13it/s]Extracting poses:  64%|██████▍   | 123/192 [00:04<00:02, 27.16it/s]Extracting poses:  66%|██████▌   | 127/192 [00:04<00:02, 26.88it/s]Extracting poses:  68%|██████▊   | 131/192 [00:04<00:02, 27.16it/s]Extracting poses:  70%|███████   | 135/192 [00:04<00:02, 27.20it/s]Extracting poses:  72%|███████▏  | 139/192 [00:05<00:01, 26.83it/s]Extracting poses:  74%|███████▍  | 143/192 [00:05<00:01, 26.67it/s]Extracting poses:  77%|███████▋  | 147/192 [00:05<00:01, 26.97it/s]Extracting poses:  79%|███████▊  | 151/192 [00:05<00:01, 26.78it/s]Extracting poses:  81%|████████  | 155/192 [00:05<00:01, 26.63it/s]Extracting poses:  83%|████████▎ | 159/192 [00:05<00:01, 26.90it/s]Extracting poses:  85%|████████▍ | 163/192 [00:06<00:01, 25.89it/s]Extracting poses:  87%|████████▋ | 167/192 [00:06<00:00, 25.85it/s]Extracting poses:  89%|████████▉ | 171/192 [00:06<00:00, 26.08it/s]Extracting poses:  91%|█████████ | 175/192 [00:06<00:00, 26.79it/s]Extracting poses:  93%|█████████▎| 179/192 [00:06<00:00, 26.67it/s]Extracting poses:  95%|█████████▌| 183/192 [00:06<00:00, 26.65it/s]Extracting poses:  97%|█████████▋| 187/192 [00:06<00:00, 26.47it/s]Extracting poses:  99%|█████████▉| 191/192 [00:07<00:00, 26.41it/s]Extracting poses: 100%|██████████| 192/192 [00:07<00:00, 27.01it/s]
-Extracted 96 pose frames
-  Converting to BVH...
-Using frame 0 as reference (confidence: 1.00)
-Setting up skeleton from reference frame...
-Calculating dynamic ground level...
-Dynamic ground level determined at Y=-85.88
-Initializing improved IK foot locking system...
-IK System initialized with bone lengths:
-  Thigh: 41.83 units
-  Shin: 38.37 units
-  Ground level: -85.88 units
-Calibrated IK thresholds:
-  Velocity threshold: 2.500
-  Height threshold: 8.000
-  Vertical vel threshold: 1.000
-  Clearance height: 4.000
-Extracting leg positions for IK processing (Pass 1)...
-Applying improved IK foot locking (Pass 1)...
-Improved IK Statistics:
-  Frames with foot contact: 41/96 (42.7%)
-Calculating root motion from foot lock...
-Traceback (most recent call last):
-  File "/home/nlarion/Desktop/mediapipe-to-bvh/verify_improvements.py", line 90, in <module>
-    verify()
-  File "/home/nlarion/Desktop/mediapipe-to-bvh/verify_improvements.py", line 49, in verify
-    success = converter.convert(pose_frames, output_path)
-              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/home/nlarion/Desktop/mediapipe-to-bvh/bvh_converter.py", line 92, in convert
-    hip_positions = self._calculate_root_motion_from_feet(pose_frames)
-                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/home/nlarion/Desktop/mediapipe-to-bvh/bvh_converter.py", line 850, in _calculate_root_motion_from_feet
-    left_ankle = np.array([pose_frames[0].world_landmarks[mp_pose.PoseLandmark.LEFT_ANKLE].x, pose_frames[0].world_landmarks[mp_pose.PoseLandmark.LEFT_ANKLE].y, pose_frames[0].PoseLandmark.LEFT_ANKLE.z])
-                                                                                                                                                                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
-AttributeError: 'PoseFrame' object has no attribute 'PoseLandmark'
