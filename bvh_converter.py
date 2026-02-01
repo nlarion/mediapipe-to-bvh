@@ -583,7 +583,9 @@ class ImprovedBVHConverter:
     def _calculate_head_global_rotation(self, landmarks, torso_basis: Optional[Tuple[np.ndarray, np.ndarray, np.ndarray]] = None) -> Optional[np.ndarray]:
         """
         Simple head rotation from ear and nose landmarks.
+        This approach works well for most poses including walking, fighting, and shrugging.
         Based on the original stable approach from commit 01ead91.
+
         Returns GLOBAL Euler XYZ degrees.
         """
         try:
