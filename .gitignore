@@ -3,3 +3,43 @@ __pycache__
 __pycache__*
 __pycache__/*
 easy_ViTPose
+.aider*
+
+# Visual accuracy testing outputs
+tuning_output/
+accuracy_tests/
+test_results/
+visual_accuracy_output/
+
+# Comparison images
+*.png
+!docs/*.png
+
+# Temporary BVH files from testing (keep main outputs)
+bvh/*_v[0-9].bvh
+bvh/*_v[0-9][0-9].bvh
+bvh/*_blended.bvh
+bvh/*_original.bvh
+bvh/*_final.bvh
+bvh/*_fixed.bvh
+
+# Python
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Debug/verification logs
+verify_log*.txt
+
+# OS
+.DS_Store
+Thumbs.db

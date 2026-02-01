@@ -1,291 +1,0 @@
-2025-11-20 16:11:47.534231: E external/local_xla/xla/stream_executor/cuda/cuda_dnn.cc:9261] Unable to register cuDNN factory: Attempting to register factory for plugin cuDNN when one has already been registered
-2025-11-20 16:11:47.534446: E external/local_xla/xla/stream_executor/cuda/cuda_fft.cc:607] Unable to register cuFFT factory: Attempting to register factory for plugin cuFFT when one has already been registered
-2025-11-20 16:11:47.538409: E external/local_xla/xla/stream_executor/cuda/cuda_blas.cc:1515] Unable to register cuBLAS factory: Attempting to register factory for plugin cuBLAS when one has already been registered
-2025-11-20 16:11:47.562058: I tensorflow/core/platform/cpu_feature_guard.cc:182] This TensorFlow binary is optimized to use available CPU instructions in performance-critical operations.
-To enable the following instructions: AVX2 FMA, in other operations, rebuild TensorFlow with the appropriate compiler flags.
-2025-11-20 16:11:50.730772: W tensorflow/compiler/tf2tensorrt/utils/py_utils.cc:38] TF-TRT Warning: Could not find TensorRT
-WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
-I0000 00:00:1763683915.924484   10058 gl_context_egl.cc:85] Successfully initialized EGL. Major : 1 Minor: 5
-I0000 00:00:1763683915.938135   10135 gl_context.cc:369] GL version: 3.2 (OpenGL ES 3.2 Mesa 22.3.6), renderer: Mesa Intel(R) HD Graphics 4600 (HSW GT2)
-INFO: Created TensorFlow Lite XNNPACK delegate for CPU.
-Starting verification on 5 videos...
-------------------------------------------------------------
-
-Processing walking_00001.mp4...
-Video properties: 1280x720, 24.0 FPS, 192 frames
-Sampling every 2 frames
-Extracting poses:   0%|          | 0/192 [00:00<?, ?it/s]W0000 00:00:1763683916.214127   10131 inference_feedback_manager.cc:114] Feedback manager requires a model with a single signature inference. Disabling support for feedback tensors.
-W0000 00:00:1763683916.320422   10125 inference_feedback_manager.cc:114] Feedback manager requires a model with a single signature inference. Disabling support for feedback tensors.
-W0000 00:00:1763683916.333487   10128 inference_feedback_manager.cc:114] Feedback manager requires a model with a single signature inference. Disabling support for feedback tensors.
-W0000 00:00:1763683916.333926   10132 inference_feedback_manager.cc:114] Feedback manager requires a model with a single signature inference. Disabling support for feedback tensors.
-W0000 00:00:1763683916.335747   10130 inference_feedback_manager.cc:114] Feedback manager requires a model with a single signature inference. Disabling support for feedback tensors.
-W0000 00:00:1763683916.366456   10129 inference_feedback_manager.cc:114] Feedback manager requires a model with a single signature inference. Disabling support for feedback tensors.
-W0000 00:00:1763683916.386615   10125 inference_feedback_manager.cc:114] Feedback manager requires a model with a single signature inference. Disabling support for feedback tensors.
-W0000 00:00:1763683916.397443   10126 inference_feedback_manager.cc:114] Feedback manager requires a model with a single signature inference. Disabling support for feedback tensors.
-W0000 00:00:1763683916.443184   10128 landmark_projection_calculator.cc:186] Using NORM_RECT without IMAGE_DIMENSIONS is only supported for the square ROI. Provide IMAGE_DIMENSIONS or use PROJECTION_MATRIX.
-Extracting poses:   1%|          | 1/192 [00:00<01:36,  1.99it/s]Extracting poses:   2%|▏         | 3/192 [00:00<00:39,  4.82it/s]Extracting poses:   3%|▎         | 5/192 [00:00<00:26,  7.13it/s]Extracting poses:   4%|▎         | 7/192 [00:00<00:20,  9.13it/s]Extracting poses:   5%|▍         | 9/192 [00:01<00:19,  9.47it/s]Extracting poses:   6%|▌         | 11/192 [00:01<00:19,  9.44it/s]Extracting poses:   7%|▋         | 13/192 [00:01<00:18,  9.67it/s]Extracting poses:   8%|▊         | 15/192 [00:01<00:17,  9.98it/s]Extracting poses:   9%|▉         | 17/192 [00:01<00:17, 10.08it/s]Extracting poses:  10%|▉         | 19/192 [00:02<00:15, 10.84it/s]Extracting poses:  11%|█         | 21/192 [00:02<00:15, 10.88it/s]Extracting poses:  12%|█▏        | 23/192 [00:02<00:14, 11.40it/s]Extracting poses:  13%|█▎        | 25/192 [00:02<00:15, 10.97it/s]Extracting poses:  14%|█▍        | 27/192 [00:02<00:13, 12.03it/s]Extracting poses:  15%|█▌        | 29/192 [00:02<00:12, 12.93it/s]Extracting poses:  16%|█▌        | 31/192 [00:03<00:12, 12.90it/s]Extracting poses:  17%|█▋        | 33/192 [00:03<00:12, 12.50it/s]Extracting poses:  18%|█▊        | 35/192 [00:03<00:12, 12.62it/s]Extracting poses:  19%|█▉        | 37/192 [00:03<00:11, 13.34it/s]Extracting poses:  20%|██        | 39/192 [00:03<00:11, 13.19it/s]Extracting poses:  21%|██▏       | 41/192 [00:03<00:11, 13.31it/s]Extracting poses:  22%|██▏       | 43/192 [00:04<00:11, 12.46it/s]Extracting poses:  23%|██▎       | 45/192 [00:04<00:12, 11.90it/s]Extracting poses:  24%|██▍       | 47/192 [00:04<00:13, 10.72it/s]Extracting poses:  26%|██▌       | 49/192 [00:04<00:13, 10.69it/s]Extracting poses:  27%|██▋       | 51/192 [00:04<00:13, 10.47it/s]Extracting poses:  28%|██▊       | 53/192 [00:05<00:13, 10.20it/s]Extracting poses:  29%|██▊       | 55/192 [00:05<00:12, 10.97it/s]Extracting poses:  30%|██▉       | 57/192 [00:05<00:11, 12.13it/s]Extracting poses:  31%|███       | 59/192 [00:05<00:11, 11.72it/s]Extracting poses:  32%|███▏      | 61/192 [00:05<00:11, 11.82it/s]Extracting poses:  33%|███▎      | 63/192 [00:05<00:11, 11.33it/s]Extracting poses:  34%|███▍      | 65/192 [00:06<00:11, 11.43it/s]Extracting poses:  35%|███▍      | 67/192 [00:06<00:10, 11.74it/s]Extracting poses:  36%|███▌      | 69/192 [00:06<00:10, 12.22it/s]Extracting poses:  37%|███▋      | 71/192 [00:06<00:10, 11.57it/s]Extracting poses:  38%|███▊      | 73/192 [00:06<00:10, 11.00it/s]Extracting poses:  39%|███▉      | 75/192 [00:06<00:11, 10.64it/s]Extracting poses:  40%|████      | 77/192 [00:07<00:11, 10.10it/s]Extracting poses:  41%|████      | 79/192 [00:07<00:11, 10.04it/s]Extracting poses:  42%|████▏     | 81/192 [00:07<00:11,  9.79it/s]Extracting poses:  43%|████▎     | 83/192 [00:07<00:11,  9.51it/s]Extracting poses:  44%|████▍     | 85/192 [00:08<00:11,  9.48it/s]Extracting poses:  45%|████▌     | 87/192 [00:08<00:10,  9.67it/s]Extracting poses:  46%|████▋     | 89/192 [00:08<00:10,  9.93it/s]Extracting poses:  47%|████▋     | 91/192 [00:08<00:10,  9.83it/s]Extracting poses:  48%|████▊     | 93/192 [00:08<00:09,  9.98it/s]Extracting poses:  49%|████▉     | 95/192 [00:09<00:09, 10.02it/s]Extracting poses:  51%|█████     | 97/192 [00:09<00:09,  9.88it/s]Extracting poses:  52%|█████▏    | 99/192 [00:09<00:09,  9.84it/s]Extracting poses:  53%|█████▎    | 101/192 [00:09<00:09,  9.99it/s]Extracting poses:  54%|█████▎    | 103/192 [00:09<00:08, 10.21it/s]Extracting poses:  55%|█████▍    | 105/192 [00:10<00:08,  9.92it/s]Extracting poses:  56%|█████▌    | 107/192 [00:10<00:08,  9.64it/s]Extracting poses:  57%|█████▋    | 109/192 [00:10<00:08,  9.65it/s]Extracting poses:  58%|█████▊    | 111/192 [00:10<00:08,  9.74it/s]Extracting poses:  59%|█████▉    | 113/192 [00:10<00:07,  9.90it/s]Extracting poses:  60%|█████▉    | 115/192 [00:11<00:07,  9.89it/s]Extracting poses:  61%|██████    | 117/192 [00:11<00:07,  9.83it/s]Extracting poses:  62%|██████▏   | 119/192 [00:11<00:06, 11.04it/s]Extracting poses:  64%|██████▍   | 123/192 [00:11<00:04, 14.76it/s]Extracting poses:  66%|██████▌   | 127/192 [00:11<00:03, 17.37it/s]Extracting poses:  68%|██████▊   | 131/192 [00:11<00:03, 19.33it/s]Extracting poses:  70%|███████   | 135/192 [00:12<00:02, 21.07it/s]Extracting poses:  72%|███████▏  | 139/192 [00:12<00:02, 22.13it/s]Extracting poses:  74%|███████▍  | 143/192 [00:12<00:02, 22.90it/s]Extracting poses:  77%|███████▋  | 147/192 [00:12<00:01, 23.48it/s]Extracting poses:  79%|███████▊  | 151/192 [00:12<00:01, 24.45it/s]Extracting poses:  81%|████████  | 155/192 [00:12<00:01, 24.73it/s]Extracting poses:  83%|████████▎ | 159/192 [00:12<00:01, 25.37it/s]Extracting poses:  85%|████████▍ | 163/192 [00:13<00:01, 25.16it/s]Extracting poses:  87%|████████▋ | 167/192 [00:13<00:00, 25.50it/s]Extracting poses:  89%|████████▉ | 171/192 [00:13<00:00, 25.40it/s]Extracting poses:  91%|█████████ | 175/192 [00:13<00:00, 25.54it/s]Extracting poses:  93%|█████████▎| 179/192 [00:13<00:00, 25.39it/s]Extracting poses:  95%|█████████▌| 183/192 [00:13<00:00, 25.31it/s]Extracting poses:  97%|█████████▋| 187/192 [00:14<00:00, 25.33it/s]Extracting poses:  99%|█████████▉| 191/192 [00:14<00:00, 25.47it/s]Extracting poses: 100%|██████████| 192/192 [00:14<00:00, 13.49it/s]
-I0000 00:00:1763683930.735699   10058 gl_context_egl.cc:85] Successfully initialized EGL. Major : 1 Minor: 5
-I0000 00:00:1763683930.736851   10238 gl_context.cc:369] GL version: 3.2 (OpenGL ES 3.2 Mesa 22.3.6), renderer: Mesa Intel(R) HD Graphics 4600 (HSW GT2)
-W0000 00:00:1763683930.819934   10229 inference_feedback_manager.cc:114] Feedback manager requires a model with a single signature inference. Disabling support for feedback tensors.
-W0000 00:00:1763683930.912680   10231 inference_feedback_manager.cc:114] Feedback manager requires a model with a single signature inference. Disabling support for feedback tensors.
-I0000 00:00:1763683953.792646   10058 gl_context_egl.cc:85] Successfully initialized EGL. Major : 1 Minor: 5
-I0000 00:00:1763683953.793677   10464 gl_context.cc:369] GL version: 3.2 (OpenGL ES 3.2 Mesa 22.3.6), renderer: Mesa Intel(R) HD Graphics 4600 (HSW GT2)
-Extracted 96 pose frames
-  Converting to BVH...
-Using frame 0 as reference (confidence: 1.00)
-Setting up skeleton from reference frame...
-Calculating dynamic ground level...
-Dynamic ground level determined at Y=-83.80
-Initializing improved IK foot locking system...
-IK System initialized with bone lengths:
-  Thigh: 41.67 units
-  Shin: 37.15 units
-  Ground level: -83.80 units
-Calibrated IK thresholds:
-  Velocity threshold: 2.500
-  Height threshold: 8.000
-  Vertical vel threshold: 1.000
-  Clearance height: 4.000
-Extracting leg positions for IK processing (Pass 1)...
-Applying improved IK foot locking (Pass 1)...
-Improved IK Statistics:
-  Frames with foot contact: 44/95 (46.3%)
-Calculating hip movement with drift correction...
-Updating pose frames with corrected hip positions...
-Extracting leg positions for IK processing (Pass 2)...
-Applying improved IK foot locking (Pass 2)...
-Improved IK Statistics:
-  Frames with foot contact: 44/95 (46.3%)
-✅ Detected 39 foot contact frames
-Calculating joint rotations with improved hand tracking...
-Applying adaptive temporal smoothing...
-Writing BVH file to test_output/walking_00001_improved.bvh...
-BVH file created successfully: test_output/walking_00001_improved.bvh
-✅ Improved IK foot locking applied
-✅ Detected 39 foot contact frames
-  Analyzing accuracy...
-  > Score: 73.72 | Skate: 27.08
-
-Processing fighter_001.mp4...
-Video properties: 1280x720, 24.0 FPS, 192 frames
-Sampling every 2 frames
-Extracting poses:   0%|          | 0/192 [00:00<?, ?it/s]W0000 00:00:1763683953.881566   10456 inference_feedback_manager.cc:114] Feedback manager requires a model with a single signature inference. Disabling support for feedback tensors.
-W0000 00:00:1763683953.921719   10455 inference_feedback_manager.cc:114] Feedback manager requires a model with a single signature inference. Disabling support for feedback tensors.
-W0000 00:00:1763683953.925370   10458 inference_feedback_manager.cc:114] Feedback manager requires a model with a single signature inference. Disabling support for feedback tensors.
-W0000 00:00:1763683953.926016   10457 inference_feedback_manager.cc:114] Feedback manager requires a model with a single signature inference. Disabling support for feedback tensors.
-W0000 00:00:1763683953.927819   10461 inference_feedback_manager.cc:114] Feedback manager requires a model with a single signature inference. Disabling support for feedback tensors.
-W0000 00:00:1763683953.941131   10460 inference_feedback_manager.cc:114] Feedback manager requires a model with a single signature inference. Disabling support for feedback tensors.
-W0000 00:00:1763683953.962149   10457 inference_feedback_manager.cc:114] Feedback manager requires a model with a single signature inference. Disabling support for feedback tensors.
-W0000 00:00:1763683953.962302   10458 inference_feedback_manager.cc:114] Feedback manager requires a model with a single signature inference. Disabling support for feedback tensors.
-Extracting poses:   1%|          | 1/192 [00:00<00:38,  4.94it/s]Extracting poses:   3%|▎         | 5/192 [00:00<00:12, 15.40it/s]Extracting poses:   5%|▍         | 9/192 [00:00<00:09, 19.70it/s]Extracting poses:   7%|▋         | 13/192 [00:00<00:08, 21.96it/s]Extracting poses:   9%|▉         | 17/192 [00:00<00:07, 23.34it/s]Extracting poses:  11%|█         | 21/192 [00:00<00:07, 24.23it/s]Extracting poses:  13%|█▎        | 25/192 [00:01<00:06, 24.02it/s]Extracting poses:  15%|█▌        | 29/192 [00:01<00:06, 24.88it/s]Extracting poses:  17%|█▋        | 33/192 [00:01<00:06, 25.80it/s]Extracting poses:  19%|█▉        | 37/192 [00:01<00:05, 25.89it/s]Extracting poses:  21%|██▏       | 41/192 [00:01<00:05, 25.37it/s]Extracting poses:  23%|██▎       | 45/192 [00:01<00:05, 25.34it/s]Extracting poses:  26%|██▌       | 49/192 [00:02<00:05, 24.23it/s]Extracting poses:  27%|██▋       | 52/192 [00:02<00:05, 25.38it/s]Extracting poses:  29%|██▊       | 55/192 [00:02<00:06, 19.93it/s]Extracting poses:  31%|███       | 59/192 [00:02<00:06, 21.52it/s]Extracting poses:  33%|███▎      | 63/192 [00:02<00:05, 22.82it/s]Extracting poses:  35%|███▍      | 67/192 [00:02<00:05, 24.11it/s]Extracting poses:  37%|███▋      | 71/192 [00:03<00:04, 24.83it/s]Extracting poses:  39%|███▉      | 75/192 [00:03<00:04, 24.71it/s]Extracting poses:  41%|████      | 79/192 [00:03<00:04, 24.97it/s]Extracting poses:  43%|████▎     | 83/192 [00:03<00:04, 25.98it/s]Extracting poses:  45%|████▌     | 87/192 [00:03<00:04, 25.50it/s]Extracting poses:  47%|████▋     | 91/192 [00:03<00:03, 26.22it/s]Extracting poses:  49%|████▉     | 95/192 [00:03<00:03, 26.39it/s]Extracting poses:  52%|█████▏    | 99/192 [00:04<00:03, 25.22it/s]Extracting poses:  53%|█████▎    | 102/192 [00:04<00:03, 26.18it/s]Extracting poses:  55%|█████▍    | 105/192 [00:04<00:03, 22.14it/s]Extracting poses:  57%|█████▋    | 109/192 [00:04<00:03, 23.07it/s]Extracting poses:  59%|█████▉    | 113/192 [00:04<00:03, 23.00it/s]Extracting poses:  60%|██████    | 116/192 [00:04<00:03, 24.30it/s]Extracting poses:  62%|██████▏   | 119/192 [00:05<00:03, 21.73it/s]Extracting poses:  64%|██████▍   | 123/192 [00:05<00:03, 21.14it/s]Extracting poses:  66%|██████▌   | 127/192 [00:05<00:03, 21.34it/s]Extracting poses:  68%|██████▊   | 131/192 [00:05<00:02, 21.70it/s]Extracting poses:  70%|██████▉   | 134/192 [00:05<00:02, 22.89it/s]Extracting poses:  71%|███████▏  | 137/192 [00:05<00:02, 21.22it/s]Extracting poses:  73%|███████▎  | 141/192 [00:06<00:02, 23.16it/s]Extracting poses:  76%|███████▌  | 145/192 [00:06<00:01, 24.38it/s]Extracting poses:  78%|███████▊  | 149/192 [00:06<00:01, 25.08it/s]Extracting poses:  80%|███████▉  | 153/192 [00:06<00:01, 25.58it/s]Extracting poses:  82%|████████▏ | 157/192 [00:06<00:01, 25.76it/s]Extracting poses:  84%|████████▍ | 161/192 [00:06<00:01, 25.51it/s]Extracting poses:  86%|████████▌ | 165/192 [00:06<00:01, 25.65it/s]Extracting poses:  88%|████████▊ | 169/192 [00:07<00:00, 24.48it/s]Extracting poses:  90%|█████████ | 173/192 [00:07<00:00, 25.29it/s]Extracting poses:  92%|█████████▏| 177/192 [00:07<00:00, 25.14it/s]Extracting poses:  94%|█████████▍| 181/192 [00:07<00:00, 25.73it/s]Extracting poses:  96%|█████████▋| 185/192 [00:07<00:00, 25.67it/s]Extracting poses:  98%|█████████▊| 189/192 [00:07<00:00, 25.29it/s]Extracting poses: 100%|██████████| 192/192 [00:07<00:00, 24.02it/s]
-I0000 00:00:1763683962.318495   10058 gl_context_egl.cc:85] Successfully initialized EGL. Major : 1 Minor: 5
-I0000 00:00:1763683962.320666   10580 gl_context.cc:369] GL version: 3.2 (OpenGL ES 3.2 Mesa 22.3.6), renderer: Mesa Intel(R) HD Graphics 4600 (HSW GT2)
-W0000 00:00:1763683962.400313   10573 inference_feedback_manager.cc:114] Feedback manager requires a model with a single signature inference. Disabling support for feedback tensors.
-W0000 00:00:1763683962.483643   10574 inference_feedback_manager.cc:114] Feedback manager requires a model with a single signature inference. Disabling support for feedback tensors.
-I0000 00:00:1763683985.330943   10058 gl_context_egl.cc:85] Successfully initialized EGL. Major : 1 Minor: 5
-I0000 00:00:1763683985.332062   10793 gl_context.cc:369] GL version: 3.2 (OpenGL ES 3.2 Mesa 22.3.6), renderer: Mesa Intel(R) HD Graphics 4600 (HSW GT2)
-Extracted 96 pose frames
-  Converting to BVH...
-Using frame 0 as reference (confidence: 1.00)
-Setting up skeleton from reference frame...
-Calculating dynamic ground level...
-Dynamic ground level determined at Y=-85.88
-Initializing improved IK foot locking system...
-IK System initialized with bone lengths:
-  Thigh: 41.83 units
-  Shin: 38.37 units
-  Ground level: -85.88 units
-Calibrated IK thresholds:
-  Velocity threshold: 2.500
-  Height threshold: 8.000
-  Vertical vel threshold: 1.000
-  Clearance height: 4.000
-Extracting leg positions for IK processing (Pass 1)...
-Applying improved IK foot locking (Pass 1)...
-Improved IK Statistics:
-  Frames with foot contact: 41/96 (42.7%)
-Calculating hip movement with drift correction...
-Updating pose frames with corrected hip positions...
-Extracting leg positions for IK processing (Pass 2)...
-Applying improved IK foot locking (Pass 2)...
-Improved IK Statistics:
-  Frames with foot contact: 41/96 (42.7%)
-✅ Detected 55 foot contact frames
-Calculating joint rotations with improved hand tracking...
-Applying adaptive temporal smoothing...
-Writing BVH file to test_output/fighter_001_improved.bvh...
-BVH file created successfully: test_output/fighter_001_improved.bvh
-✅ Improved IK foot locking applied
-✅ Detected 55 foot contact frames
-  Analyzing accuracy...
-  > Score: 71.92 | Skate: 0.00
-
-Processing fighter_002.mp4...
-Video properties: 1280x720, 24.0 FPS, 192 frames
-Sampling every 2 frames
-Extracting poses:   0%|          | 0/192 [00:00<?, ?it/s]W0000 00:00:1763683985.413589   10786 inference_feedback_manager.cc:114] Feedback manager requires a model with a single signature inference. Disabling support for feedback tensors.
-W0000 00:00:1763683985.454295   10791 inference_feedback_manager.cc:114] Feedback manager requires a model with a single signature inference. Disabling support for feedback tensors.
-W0000 00:00:1763683985.457440   10787 inference_feedback_manager.cc:114] Feedback manager requires a model with a single signature inference. Disabling support for feedback tensors.
-W0000 00:00:1763683985.457511   10785 inference_feedback_manager.cc:114] Feedback manager requires a model with a single signature inference. Disabling support for feedback tensors.
-W0000 00:00:1763683985.459468   10791 inference_feedback_manager.cc:114] Feedback manager requires a model with a single signature inference. Disabling support for feedback tensors.
-W0000 00:00:1763683985.470655   10787 inference_feedback_manager.cc:114] Feedback manager requires a model with a single signature inference. Disabling support for feedback tensors.
-W0000 00:00:1763683985.491117   10790 inference_feedback_manager.cc:114] Feedback manager requires a model with a single signature inference. Disabling support for feedback tensors.
-W0000 00:00:1763683985.496511   10791 inference_feedback_manager.cc:114] Feedback manager requires a model with a single signature inference. Disabling support for feedback tensors.
-Extracting poses:   1%|          | 1/192 [00:00<00:36,  5.18it/s]Extracting poses:   3%|▎         | 5/192 [00:00<00:12, 15.39it/s]Extracting poses:   5%|▍         | 9/192 [00:00<00:09, 19.07it/s]Extracting poses:   7%|▋         | 13/192 [00:00<00:08, 21.02it/s]Extracting poses:   9%|▉         | 17/192 [00:00<00:08, 21.77it/s]Extracting poses:  11%|█         | 21/192 [00:01<00:07, 22.50it/s]Extracting poses:  13%|█▎        | 25/192 [00:01<00:07, 22.65it/s]Extracting poses:  15%|█▌        | 29/192 [00:01<00:07, 22.31it/s]Extracting poses:  17%|█▋        | 33/192 [00:01<00:06, 22.78it/s]Extracting poses:  19%|█▉        | 37/192 [00:01<00:06, 23.22it/s]Extracting poses:  21%|██▏       | 41/192 [00:01<00:06, 23.75it/s]Extracting poses:  23%|██▎       | 45/192 [00:02<00:06, 23.70it/s]Extracting poses:  25%|██▌       | 48/192 [00:02<00:05, 24.75it/s]Extracting poses:  27%|██▋       | 51/192 [00:02<00:06, 22.69it/s]Extracting poses:  29%|██▊       | 55/192 [00:02<00:05, 23.11it/s]Extracting poses:  31%|███       | 59/192 [00:02<00:05, 23.39it/s]Extracting poses:  33%|███▎      | 63/192 [00:02<00:05, 23.64it/s]Extracting poses:  35%|███▍      | 67/192 [00:03<00:05, 22.92it/s]Extracting poses:  37%|███▋      | 71/192 [00:03<00:05, 23.56it/s]Extracting poses:  39%|███▉      | 75/192 [00:03<00:04, 24.11it/s]Extracting poses:  41%|████      | 79/192 [00:03<00:04, 24.15it/s]Extracting poses:  43%|████▎     | 83/192 [00:03<00:04, 24.22it/s]Extracting poses:  45%|████▌     | 87/192 [00:03<00:04, 23.80it/s]Extracting poses:  47%|████▋     | 91/192 [00:03<00:04, 24.75it/s]Extracting poses:  49%|████▉     | 95/192 [00:04<00:03, 24.62it/s]Extracting poses:  52%|█████▏    | 99/192 [00:04<00:03, 24.82it/s]Extracting poses:  54%|█████▎    | 103/192 [00:04<00:03, 25.08it/s]Extracting poses:  56%|█████▌    | 107/192 [00:04<00:03, 25.47it/s]Extracting poses:  58%|█████▊    | 111/192 [00:04<00:03, 25.77it/s]Extracting poses:  60%|█████▉    | 115/192 [00:04<00:02, 25.95it/s]Extracting poses:  62%|██████▏   | 119/192 [00:05<00:02, 24.40it/s]Extracting poses:  64%|██████▍   | 123/192 [00:05<00:02, 23.91it/s]Extracting poses:  66%|██████▌   | 127/192 [00:05<00:02, 23.70it/s]Extracting poses:  68%|██████▊   | 131/192 [00:05<00:02, 22.77it/s]Extracting poses:  70%|███████   | 135/192 [00:05<00:02, 23.58it/s]Extracting poses:  72%|███████▏  | 139/192 [00:05<00:02, 24.01it/s]Extracting poses:  74%|███████▍  | 143/192 [00:06<00:02, 24.23it/s]Extracting poses:  77%|███████▋  | 147/192 [00:06<00:01, 25.12it/s]Extracting poses:  79%|███████▊  | 151/192 [00:06<00:01, 25.41it/s]Extracting poses:  80%|████████  | 154/192 [00:06<00:01, 26.28it/s]Extracting poses:  82%|████████▏ | 157/192 [00:06<00:01, 22.92it/s]Extracting poses:  83%|████████▎ | 160/192 [00:06<00:01, 23.81it/s]Extracting poses:  85%|████████▍ | 163/192 [00:07<00:01, 20.09it/s]Extracting poses:  87%|████████▋ | 167/192 [00:07<00:01, 19.46it/s]Extracting poses:  89%|████████▊ | 170/192 [00:07<00:01, 20.53it/s]Extracting poses:  90%|█████████ | 173/192 [00:07<00:01, 18.73it/s]Extracting poses:  91%|█████████ | 175/192 [00:07<00:00, 18.95it/s]Extracting poses:  92%|█████████▏| 177/192 [00:07<00:00, 18.94it/s]Extracting poses:  94%|█████████▍| 180/192 [00:07<00:00, 21.48it/s]Extracting poses:  95%|█████████▌| 183/192 [00:08<00:00, 19.63it/s]Extracting poses:  97%|█████████▋| 187/192 [00:08<00:00, 20.03it/s]Extracting poses:  99%|█████████▉| 190/192 [00:08<00:00, 21.99it/s]Extracting poses: 100%|██████████| 192/192 [00:08<00:00, 22.72it/s]
-I0000 00:00:1763683994.564854   10058 gl_context_egl.cc:85] Successfully initialized EGL. Major : 1 Minor: 5
-I0000 00:00:1763683994.566313   10869 gl_context.cc:369] GL version: 3.2 (OpenGL ES 3.2 Mesa 22.3.6), renderer: Mesa Intel(R) HD Graphics 4600 (HSW GT2)
-W0000 00:00:1763683994.656051   10863 inference_feedback_manager.cc:114] Feedback manager requires a model with a single signature inference. Disabling support for feedback tensors.
-W0000 00:00:1763683994.759405   10865 inference_feedback_manager.cc:114] Feedback manager requires a model with a single signature inference. Disabling support for feedback tensors.
-I0000 00:00:1763684019.628123   10058 gl_context_egl.cc:85] Successfully initialized EGL. Major : 1 Minor: 5
-I0000 00:00:1763684019.629300   11141 gl_context.cc:369] GL version: 3.2 (OpenGL ES 3.2 Mesa 22.3.6), renderer: Mesa Intel(R) HD Graphics 4600 (HSW GT2)
-Extracted 96 pose frames
-  Converting to BVH...
-Using frame 0 as reference (confidence: 1.00)
-Setting up skeleton from reference frame...
-Calculating dynamic ground level...
-Dynamic ground level determined at Y=-91.97
-Initializing improved IK foot locking system...
-IK System initialized with bone lengths:
-  Thigh: 42.27 units
-  Shin: 37.13 units
-  Ground level: -91.97 units
-Calibrated IK thresholds:
-  Velocity threshold: 2.500
-  Height threshold: 8.000
-  Vertical vel threshold: 1.000
-  Clearance height: 4.000
-Extracting leg positions for IK processing (Pass 1)...
-Applying improved IK foot locking (Pass 1)...
-Improved IK Statistics:
-  Frames with foot contact: 38/96 (39.6%)
-Calculating hip movement with drift correction...
-Updating pose frames with corrected hip positions...
-Extracting leg positions for IK processing (Pass 2)...
-Applying improved IK foot locking (Pass 2)...
-Improved IK Statistics:
-  Frames with foot contact: 38/96 (39.6%)
-✅ Detected 34 foot contact frames
-Calculating joint rotations with improved hand tracking...
-Applying adaptive temporal smoothing...
-Writing BVH file to test_output/fighter_002_improved.bvh...
-BVH file created successfully: test_output/fighter_002_improved.bvh
-✅ Improved IK foot locking applied
-✅ Detected 34 foot contact frames
-  Analyzing accuracy...
-  > Score: 73.87 | Skate: 37.50
-
-Processing thewave.mp4...
-Video properties: 1280x720, 30.2 FPS, 164 frames
-Sampling every 2 frames
-Extracting poses:   0%|          | 0/164 [00:00<?, ?it/s]W0000 00:00:1763684019.710743   11135 inference_feedback_manager.cc:114] Feedback manager requires a model with a single signature inference. Disabling support for feedback tensors.
-W0000 00:00:1763684019.749798   11139 inference_feedback_manager.cc:114] Feedback manager requires a model with a single signature inference. Disabling support for feedback tensors.
-W0000 00:00:1763684019.752285   11134 inference_feedback_manager.cc:114] Feedback manager requires a model with a single signature inference. Disabling support for feedback tensors.
-W0000 00:00:1763684019.754000   11135 inference_feedback_manager.cc:114] Feedback manager requires a model with a single signature inference. Disabling support for feedback tensors.
-W0000 00:00:1763684019.755372   11139 inference_feedback_manager.cc:114] Feedback manager requires a model with a single signature inference. Disabling support for feedback tensors.
-W0000 00:00:1763684019.764102   11137 inference_feedback_manager.cc:114] Feedback manager requires a model with a single signature inference. Disabling support for feedback tensors.
-W0000 00:00:1763684019.777964   11136 inference_feedback_manager.cc:114] Feedback manager requires a model with a single signature inference. Disabling support for feedback tensors.
-W0000 00:00:1763684019.785137   11134 inference_feedback_manager.cc:114] Feedback manager requires a model with a single signature inference. Disabling support for feedback tensors.
-Extracting poses:   1%|          | 1/164 [00:00<00:29,  5.51it/s]Extracting poses:   3%|▎         | 5/164 [00:00<00:09, 16.69it/s]Extracting poses:   5%|▌         | 9/164 [00:00<00:07, 20.00it/s]Extracting poses:   8%|▊         | 13/164 [00:00<00:06, 22.79it/s]Extracting poses:  10%|█         | 17/164 [00:00<00:06, 23.93it/s]Extracting poses:  13%|█▎        | 21/164 [00:00<00:05, 24.11it/s]Extracting poses:  15%|█▌        | 25/164 [00:01<00:05, 24.17it/s]Extracting poses:  18%|█▊        | 29/164 [00:01<00:05, 24.58it/s]Extracting poses:  20%|██        | 33/164 [00:01<00:05, 24.60it/s]Extracting poses:  23%|██▎       | 37/164 [00:01<00:04, 25.53it/s]Extracting poses:  25%|██▌       | 41/164 [00:01<00:04, 24.68it/s]Extracting poses:  27%|██▋       | 45/164 [00:01<00:04, 24.19it/s]Extracting poses:  30%|██▉       | 49/164 [00:02<00:04, 24.14it/s]Extracting poses:  32%|███▏      | 53/164 [00:02<00:04, 24.11it/s]Extracting poses:  35%|███▍      | 57/164 [00:02<00:04, 24.56it/s]Extracting poses:  37%|███▋      | 61/164 [00:02<00:04, 24.70it/s]Extracting poses:  40%|███▉      | 65/164 [00:02<00:04, 24.60it/s]Extracting poses:  42%|████▏     | 69/164 [00:02<00:03, 24.01it/s]Extracting poses:  45%|████▍     | 73/164 [00:03<00:03, 24.14it/s]Extracting poses:  47%|████▋     | 77/164 [00:03<00:03, 24.29it/s]Extracting poses:  49%|████▉     | 81/164 [00:03<00:03, 24.71it/s]Extracting poses:  52%|█████▏    | 85/164 [00:03<00:03, 24.75it/s]Extracting poses:  54%|█████▍    | 89/164 [00:03<00:02, 25.11it/s]Extracting poses:  57%|█████▋    | 93/164 [00:03<00:02, 24.43it/s]Extracting poses:  59%|█████▉    | 97/164 [00:04<00:02, 24.63it/s]Extracting poses:  62%|██████▏   | 101/164 [00:04<00:02, 24.72it/s]Extracting poses:  64%|██████▍   | 105/164 [00:04<00:02, 25.04it/s]Extracting poses:  66%|██████▋   | 109/164 [00:04<00:02, 25.14it/s]Extracting poses:  69%|██████▉   | 113/164 [00:04<00:02, 25.07it/s]Extracting poses:  71%|███████▏  | 117/164 [00:04<00:01, 24.27it/s]Extracting poses:  74%|███████▍  | 121/164 [00:05<00:01, 23.98it/s]Extracting poses:  76%|███████▌  | 125/164 [00:05<00:01, 24.15it/s]Extracting poses:  79%|███████▊  | 129/164 [00:05<00:01, 24.05it/s]Extracting poses:  81%|████████  | 133/164 [00:05<00:01, 24.55it/s]Extracting poses:  84%|████████▎ | 137/164 [00:05<00:01, 24.21it/s]Extracting poses:  86%|████████▌ | 141/164 [00:05<00:00, 24.27it/s]Extracting poses:  88%|████████▊ | 145/164 [00:06<00:00, 24.94it/s]Extracting poses:  91%|█████████ | 149/164 [00:06<00:00, 25.15it/s]Extracting poses:  93%|█████████▎| 153/164 [00:06<00:00, 25.50it/s]Extracting poses:  96%|█████████▌| 157/164 [00:06<00:00, 24.98it/s]Extracting poses:  98%|█████████▊| 161/164 [00:06<00:00, 25.01it/s]Extracting poses: 100%|██████████| 164/164 [00:06<00:00, 24.36it/s]
-I0000 00:00:1763684026.851543   10058 gl_context_egl.cc:85] Successfully initialized EGL. Major : 1 Minor: 5
-I0000 00:00:1763684026.852735   11315 gl_context.cc:369] GL version: 3.2 (OpenGL ES 3.2 Mesa 22.3.6), renderer: Mesa Intel(R) HD Graphics 4600 (HSW GT2)
-W0000 00:00:1763684026.926758   11307 inference_feedback_manager.cc:114] Feedback manager requires a model with a single signature inference. Disabling support for feedback tensors.
-W0000 00:00:1763684027.037432   11310 inference_feedback_manager.cc:114] Feedback manager requires a model with a single signature inference. Disabling support for feedback tensors.
-I0000 00:00:1763684046.494504   10058 gl_context_egl.cc:85] Successfully initialized EGL. Major : 1 Minor: 5
-I0000 00:00:1763684046.495921   11559 gl_context.cc:369] GL version: 3.2 (OpenGL ES 3.2 Mesa 22.3.6), renderer: Mesa Intel(R) HD Graphics 4600 (HSW GT2)
-Extracted 82 pose frames
-  Converting to BVH...
-Using frame 0 as reference (confidence: 1.00)
-Setting up skeleton from reference frame...
-Calculating dynamic ground level...
-Dynamic ground level determined at Y=-85.06
-Initializing improved IK foot locking system...
-IK System initialized with bone lengths:
-  Thigh: 39.07 units
-  Shin: 34.66 units
-  Ground level: -85.06 units
-Calibrated IK thresholds:
-  Velocity threshold: 2.500
-  Height threshold: 8.000
-  Vertical vel threshold: 1.000
-  Clearance height: 4.000
-Extracting leg positions for IK processing (Pass 1)...
-Applying improved IK foot locking (Pass 1)...
-Improved IK Statistics:
-  Frames with foot contact: 45/82 (54.9%)
-Calculating hip movement with drift correction...
-Updating pose frames with corrected hip positions...
-Extracting leg positions for IK processing (Pass 2)...
-Applying improved IK foot locking (Pass 2)...
-Improved IK Statistics:
-  Frames with foot contact: 53/82 (64.6%)
-✅ Detected 69 foot contact frames
-Calculating joint rotations with improved hand tracking...
-Applying adaptive temporal smoothing...
-Writing BVH file to test_output/thewave_improved.bvh...
-BVH file created successfully: test_output/thewave_improved.bvh
-✅ Improved IK foot locking applied
-✅ Detected 69 foot contact frames
-  Analyzing accuracy...
-  > Score: 80.25 | Skate: 0.00
-
-Processing Boxer_Video_Ready_One_Only.mp4...
-Video properties: 1280x720, 24.0 FPS, 192 frames
-Sampling every 2 frames
-Extracting poses:   0%|          | 0/192 [00:00<?, ?it/s]W0000 00:00:1763684046.567198   11551 inference_feedback_manager.cc:114] Feedback manager requires a model with a single signature inference. Disabling support for feedback tensors.
-W0000 00:00:1763684046.599716   11553 inference_feedback_manager.cc:114] Feedback manager requires a model with a single signature inference. Disabling support for feedback tensors.
-W0000 00:00:1763684046.603065   11555 inference_feedback_manager.cc:114] Feedback manager requires a model with a single signature inference. Disabling support for feedback tensors.
-W0000 00:00:1763684046.604429   11551 inference_feedback_manager.cc:114] Feedback manager requires a model with a single signature inference. Disabling support for feedback tensors.
-W0000 00:00:1763684046.607594   11553 inference_feedback_manager.cc:114] Feedback manager requires a model with a single signature inference. Disabling support for feedback tensors.
-W0000 00:00:1763684046.627268   11556 inference_feedback_manager.cc:114] Feedback manager requires a model with a single signature inference. Disabling support for feedback tensors.
-W0000 00:00:1763684046.631240   11552 inference_feedback_manager.cc:114] Feedback manager requires a model with a single signature inference. Disabling support for feedback tensors.
-W0000 00:00:1763684046.641509   11555 inference_feedback_manager.cc:114] Feedback manager requires a model with a single signature inference. Disabling support for feedback tensors.
-Extracting poses:   1%|          | 1/192 [00:00<00:34,  5.52it/s]Extracting poses:   3%|▎         | 5/192 [00:00<00:11, 16.58it/s]Extracting poses:   5%|▍         | 9/192 [00:00<00:09, 19.50it/s]Extracting poses:   7%|▋         | 13/192 [00:00<00:07, 22.48it/s]Extracting poses:   9%|▉         | 17/192 [00:00<00:07, 24.66it/s]Extracting poses:  11%|█         | 21/192 [00:00<00:06, 25.67it/s]Extracting poses:  13%|█▎        | 25/192 [00:01<00:06, 25.45it/s]Extracting poses:  15%|█▌        | 29/192 [00:01<00:06, 26.49it/s]Extracting poses:  17%|█▋        | 33/192 [00:01<00:06, 26.38it/s]Extracting poses:  19%|█▉        | 37/192 [00:01<00:05, 26.42it/s]Extracting poses:  21%|██▏       | 41/192 [00:01<00:05, 26.69it/s]Extracting poses:  23%|██▎       | 45/192 [00:01<00:05, 26.41it/s]Extracting poses:  26%|██▌       | 49/192 [00:01<00:05, 26.25it/s]Extracting poses:  28%|██▊       | 53/192 [00:02<00:05, 26.27it/s]Extracting poses:  30%|██▉       | 57/192 [00:02<00:05, 25.93it/s]Extracting poses:  32%|███▏      | 61/192 [00:02<00:04, 26.59it/s]Extracting poses:  34%|███▍      | 65/192 [00:02<00:04, 25.82it/s]Extracting poses:  36%|███▌      | 69/192 [00:02<00:04, 25.85it/s]Extracting poses:  38%|███▊      | 73/192 [00:02<00:04, 25.88it/s]Extracting poses:  40%|████      | 77/192 [00:03<00:04, 24.41it/s]Extracting poses:  42%|████▏     | 81/192 [00:03<00:04, 24.96it/s]Extracting poses:  44%|████▍     | 85/192 [00:03<00:04, 24.33it/s]Extracting poses:  46%|████▋     | 89/192 [00:03<00:04, 24.93it/s]Extracting poses:  48%|████▊     | 93/192 [00:03<00:03, 25.18it/s]Extracting poses:  51%|█████     | 97/192 [00:03<00:03, 25.24it/s]Extracting poses:  53%|█████▎    | 101/192 [00:04<00:03, 24.79it/s]Extracting poses:  55%|█████▍    | 105/192 [00:04<00:03, 24.94it/s]Extracting poses:  57%|█████▋    | 109/192 [00:04<00:03, 24.92it/s]Extracting poses:  59%|█████▉    | 113/192 [00:04<00:03, 25.58it/s]Extracting poses:  61%|██████    | 117/192 [00:04<00:02, 25.80it/s]Extracting poses:  63%|██████▎   | 121/192 [00:04<00:02, 25.92it/s]Extracting poses:  65%|██████▌   | 125/192 [00:04<00:02, 25.90it/s]Extracting poses:  67%|██████▋   | 129/192 [00:05<00:02, 25.61it/s]Extracting poses:  69%|██████▉   | 133/192 [00:05<00:02, 24.78it/s]Extracting poses:  71%|███████▏  | 137/192 [00:05<00:02, 24.77it/s]Extracting poses:  73%|███████▎  | 141/192 [00:05<00:01, 25.69it/s]Extracting poses:  76%|███████▌  | 145/192 [00:05<00:01, 25.98it/s]Extracting poses:  78%|███████▊  | 149/192 [00:05<00:01, 24.78it/s]Extracting poses:  80%|███████▉  | 153/192 [00:06<00:01, 24.53it/s]Extracting poses:  82%|████████▏ | 157/192 [00:06<00:01, 24.86it/s]Extracting poses:  84%|████████▍ | 161/192 [00:06<00:01, 25.33it/s]Extracting poses:  86%|████████▌ | 165/192 [00:06<00:01, 25.14it/s]Extracting poses:  88%|████████▊ | 169/192 [00:06<00:01, 18.10it/s]Extracting poses:  90%|█████████ | 173/192 [00:07<00:00, 19.96it/s]Extracting poses:  92%|█████████▏| 177/192 [00:07<00:00, 21.67it/s]Extracting poses:  94%|█████████▍| 181/192 [00:07<00:00, 22.63it/s]Extracting poses:  96%|█████████▋| 185/192 [00:07<00:00, 23.42it/s]Extracting poses:  98%|█████████▊| 189/192 [00:07<00:00, 24.42it/s]Extracting poses: 100%|██████████| 192/192 [00:07<00:00, 24.60it/s]
-I0000 00:00:1763684054.802283   10058 gl_context_egl.cc:85] Successfully initialized EGL. Major : 1 Minor: 5
-I0000 00:00:1763684054.803524   11702 gl_context.cc:369] GL version: 3.2 (OpenGL ES 3.2 Mesa 22.3.6), renderer: Mesa Intel(R) HD Graphics 4600 (HSW GT2)
-W0000 00:00:1763684054.882831   11696 inference_feedback_manager.cc:114] Feedback manager requires a model with a single signature inference. Disabling support for feedback tensors.
-W0000 00:00:1763684054.961084   11695 inference_feedback_manager.cc:114] Feedback manager requires a model with a single signature inference. Disabling support for feedback tensors.
-Extracted 96 pose frames
-  Converting to BVH...
-Using frame 0 as reference (confidence: 1.00)
-Setting up skeleton from reference frame...
-Calculating dynamic ground level...
-Dynamic ground level determined at Y=-88.59
-Initializing improved IK foot locking system...
-IK System initialized with bone lengths:
-  Thigh: 39.42 units
-  Shin: 36.51 units
-  Ground level: -88.59 units
-Calibrated IK thresholds:
-  Velocity threshold: 2.500
-  Height threshold: 8.000
-  Vertical vel threshold: 1.000
-  Clearance height: 4.000
-Extracting leg positions for IK processing (Pass 1)...
-Applying improved IK foot locking (Pass 1)...
-Improved IK Statistics:
-  Frames with foot contact: 18/96 (18.8%)
-Calculating hip movement with drift correction...
-Updating pose frames with corrected hip positions...
-Extracting leg positions for IK processing (Pass 2)...
-Applying improved IK foot locking (Pass 2)...
-Improved IK Statistics:
-  Frames with foot contact: 18/96 (18.8%)
-✅ Detected 58 foot contact frames
-Calculating joint rotations with improved hand tracking...
-Applying adaptive temporal smoothing...
-Writing BVH file to test_output/Boxer_Video_Ready_One_Only_improved.bvh...
-BVH file created successfully: test_output/Boxer_Video_Ready_One_Only_improved.bvh
-✅ Improved IK foot locking applied
-✅ Detected 58 foot contact frames
-  Analyzing accuracy...
-  > Score: 72.76 | Skate: 0.00
-
-=====================================================================================
-Video                          | Overall  | Natural  | Skate    | Knee     | Traj    
--------------------------------------------------------------------------------------
-walking_00001.mp4              | 73.72    | 99.89    | 27.08    | 77.20    | 0.04    
-fighter_001.mp4                | 71.92    | 98.42    | 0.00     | 49.06    | 0.53    
-fighter_002.mp4                | 73.87    | 99.11    | 37.50    | 22.64    | 0.09    
-thewave.mp4                    | 80.25    | 100.00   | 0.00     | 83.97    | 0.23    
-Boxer_Video_Ready_One_Only.mp4 | 72.76    | 99.63    | 0.00     | 44.91    | 0.10    
-=====================================================================================
