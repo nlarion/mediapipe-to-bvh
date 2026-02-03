@@ -1,9 +1,0 @@
-{
-  "name": "thewave_test",
-  "video_path": "videos/thewave.mp4",
-  "expected_metrics": {},
-  "thresholds": {},
-  "tags": [],
-  "ground_truth_path": null,
-  "description": "Auto-generated test case for thewave.mp4"
-}

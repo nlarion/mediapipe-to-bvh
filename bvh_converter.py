@@ -1,19 +1,17 @@
 """
-Improved BVH converter with fixes for ForeArm/Wrist errors and better IK calibration.
-Based on issues identified in todo.md:
-1. Better 3D hand reconstruction to fix ForeArm/Wrist errors (65-82°)
-2. Calibrated IK thresholds for foot contact detection
-3. Foot-based drift correction for walking videos
+BVH converter for MediaPipe pose to Mixamo skeleton.
 
-Head/Neck improvements:
+Features:
+- MediaPipe pose estimation to BVH format conversion
 - Optional FaceMesh-based head orientation via --face flag
 - Fallback torso-based head orientation with pitch clamp safety
+- Landmark validation and outlier rejection
+- Shoulder/hip Y leveling to fix MediaPipe bias
 """
 
 import numpy as np
 import argparse
 import time
-import copy
 from typing import List, Dict, Optional, Tuple
 import mediapipe as mp
 from scipy.spatial.transform import Rotation  # FIX: used by _rotation_from_basis
@@ -22,7 +20,6 @@ from mediapipe_extractor import MediaPipeExtractor, PoseFrame
 from skeleton_mapper import SkeletonMapper, BVHJoint
 from math_utils import calculate_rotation_from_directions, smooth_rotations, smooth_positions
 from config import BVH_CONFIG, PROCESSING_CONFIG, SMOOTHING_CONFIG
-from ik_foot_lock import IKFootLockSystem
 
 mp_pose = mp.solutions.pose
 mp_hands = mp.solutions.hands
@@ -30,16 +27,14 @@ mp_face_mesh = mp.solutions.face_mesh
 
 
 class ImprovedBVHConverter:
-    """Improved BVH converter with better hand tracking and IK calibration."""
+    """BVH converter for MediaPipe pose to Mixamo skeleton."""
 
-    def __init__(self, enable_ik: bool = False, enable_face: bool = False):
+    def __init__(self, enable_face: bool = False):
         self.skeleton_mapper = SkeletonMapper()
         self.frame_time = 1.0 / BVH_CONFIG['fps']
         self.rotation_order = BVH_CONFIG['rotation_order']
         self.scale = PROCESSING_CONFIG['scale_factor']
-        self.enable_ik = enable_ik
         self.enable_face = enable_face
-        self.ik_system = None
 
         # FaceMesh (optional)
         self._face_mesh = None
@@ -53,12 +48,11 @@ class ImprovedBVHConverter:
                 min_tracking_confidence=0.5
             )
 
-        # Store foot ground levels for drift correction
+        # Ground level for reference
         self.ground_level = None
-        self.foot_contact_frames = []
 
     def convert(self, pose_frames: List[PoseFrame], output_path: str) -> bool:
-        """Convert pose frames to BVH file with improved hand tracking and IK."""
+        """Convert pose frames to BVH file."""
         if not pose_frames:
             print("Error: No pose frames to convert")
             return False
@@ -80,23 +74,6 @@ class ImprovedBVHConverter:
         self.ground_level = self._calculate_dynamic_ground_level(pose_frames)
         print(f"Dynamic ground level determined at Y={self.ground_level:.2f}")
 
-        if self.enable_ik:
-            print("Initializing improved IK foot locking system...")
-            self._initialize_improved_ik_system(ref_landmarks, self.scale)
-            pose_frames = [copy.deepcopy(frame) for frame in pose_frames]
-
-            print("Extracting leg positions for IK processing (Pass 1)...")
-            all_leg_positions = []
-            for frame in pose_frames:
-                if frame.is_valid():
-                    leg_pos = self._extract_leg_positions(frame.world_landmarks, self.scale)
-                    all_leg_positions.append(leg_pos)
-                else:
-                    all_leg_positions.append(None)
-
-            print("Applying improved IK foot locking (Pass 1)...")
-            self._apply_improved_ik_corrections(all_leg_positions)
-
         print("Calculating root motion...")
         hip_positions = self._calculate_root_motion_from_feet(pose_frames)
 
@@ -107,21 +84,6 @@ class ImprovedBVHConverter:
                     frame.hip_position = hip_positions[i]
                 except Exception:
                     pass
-
-        if self.enable_ik:
-            print("Extracting leg positions for IK processing (Pass 2)...")
-            all_leg_positions = []
-            for frame in pose_frames:
-                if frame.is_valid():
-                    leg_pos = self._extract_leg_positions(frame.world_landmarks, self.scale)
-                    all_leg_positions.append(leg_pos)
-                else:
-                    all_leg_positions.append(None)
-
-            print("Applying improved IK foot locking (Pass 2)...")
-            corrected_positions = self._apply_improved_ik_corrections(all_leg_positions)
-            self._update_pose_frames_with_ik(pose_frames, corrected_positions)
-            print(f"✅ Detected {len(self.foot_contact_frames)} foot contact frames")
 
         print("Validating and fixing outlier landmarks...")
         pose_frames = self._validate_and_fix_landmarks(pose_frames, max_shoulder_diff=0.05)
@@ -190,107 +152,6 @@ class ImprovedBVHConverter:
 
         return positions
 
-    def _initialize_improved_ik_system(self, reference_landmarks, scale: float):
-        left_hip_idx = mp_pose.PoseLandmark.LEFT_HIP
-        left_knee_idx = mp_pose.PoseLandmark.LEFT_KNEE
-        left_ankle_idx = mp_pose.PoseLandmark.LEFT_ANKLE
-        left_foot_idx = mp_pose.PoseLandmark.LEFT_FOOT_INDEX
-
-        left_hip = np.array([reference_landmarks[left_hip_idx].x, -reference_landmarks[left_hip_idx].y, reference_landmarks[left_hip_idx].z]) * scale
-        left_knee = np.array([reference_landmarks[left_knee_idx].x, -reference_landmarks[left_knee_idx].y, reference_landmarks[left_knee_idx].z]) * scale
-        left_ankle = np.array([reference_landmarks[left_ankle_idx].x, -reference_landmarks[left_ankle_idx].y, reference_landmarks[left_ankle_idx].z]) * scale
-        left_foot = np.array([reference_landmarks[left_foot_idx].x, -reference_landmarks[left_foot_idx].y, reference_landmarks[left_foot_idx].z]) * scale
-
-        thigh_length = np.linalg.norm(left_knee - left_hip)
-        shin_length = np.linalg.norm(left_ankle - left_knee)
-
-        if self.ground_level is None:
-            self.ground_level = min(left_ankle[1], left_foot[1])
-
-        self.ik_system = IKFootLockSystem(thigh_length, shin_length)
-        self.ik_system.config.contact_velocity_threshold = 4.0 * (scale / 100.0)
-        self.ik_system.config.contact_height_threshold = 0.12 * scale
-        self.ik_system.config.foot_clearance_height = 0.05 * scale
-        self.ik_system.config.vertical_velocity_threshold = 2.0 * (scale / 100.0)
-
-    def _extract_leg_positions(self, world_landmarks, scale: float) -> Dict[str, Dict[str, np.ndarray]]:
-        positions = {}
-
-        left_hip_idx = mp_pose.PoseLandmark.LEFT_HIP
-        left_knee_idx = mp_pose.PoseLandmark.LEFT_KNEE
-        left_ankle_idx = mp_pose.PoseLandmark.LEFT_ANKLE
-        left_foot_idx = mp_pose.PoseLandmark.LEFT_FOOT_INDEX
-
-        positions['left'] = {
-            'hip': np.array([world_landmarks[left_hip_idx].x, -world_landmarks[left_hip_idx].y, world_landmarks[left_hip_idx].z]) * scale,
-            'knee': np.array([world_landmarks[left_knee_idx].x, -world_landmarks[left_knee_idx].y, world_landmarks[left_knee_idx].z]) * scale,
-            'ankle': np.array([world_landmarks[left_ankle_idx].x, -world_landmarks[left_ankle_idx].y, world_landmarks[left_ankle_idx].z]) * scale,
-            'foot': np.array([world_landmarks[left_foot_idx].x, -world_landmarks[left_foot_idx].y, world_landmarks[left_foot_idx].z]) * scale
-        }
-
-        right_hip_idx = mp_pose.PoseLandmark.RIGHT_HIP
-        right_knee_idx = mp_pose.PoseLandmark.RIGHT_KNEE
-        right_ankle_idx = mp_pose.PoseLandmark.RIGHT_ANKLE
-        right_foot_idx = mp_pose.PoseLandmark.RIGHT_FOOT_INDEX
-
-        positions['right'] = {
-            'hip': np.array([world_landmarks[right_hip_idx].x, -world_landmarks[right_hip_idx].y, world_landmarks[right_hip_idx].z]) * scale,
-            'knee': np.array([world_landmarks[right_knee_idx].x, -world_landmarks[right_knee_idx].y, world_landmarks[right_knee_idx].z]) * scale,
-            'ankle': np.array([world_landmarks[right_ankle_idx].x, -world_landmarks[right_ankle_idx].y, world_landmarks[right_ankle_idx].z]) * scale,
-            'foot': np.array([world_landmarks[right_foot_idx].x, -world_landmarks[right_foot_idx].y, world_landmarks[right_foot_idx].z]) * scale
-        }
-
-        return positions
-
-    def _apply_improved_ik_corrections(self, all_leg_positions: List[Optional[Dict]]) -> List[Optional[Dict]]:
-        corrected = []
-        previous_ankles = None
-        self.foot_contact_frames = []
-
-        for i, leg_positions in enumerate(all_leg_positions):
-            if leg_positions is None:
-                corrected.append(None)
-                continue
-
-            hip_positions = {'left': leg_positions['left']['hip'], 'right': leg_positions['right']['hip']}
-            knee_positions = {'left': leg_positions['left']['knee'], 'right': leg_positions['right']['knee']}
-            ankle_positions = {'left': leg_positions['left']['ankle'], 'right': leg_positions['right']['ankle']}
-            foot_positions = {'left': leg_positions['left']['foot'], 'right': leg_positions['right']['foot']}
-
-            left_contact = self._detect_foot_contact(
-                ankle_positions['left'],
-                foot_positions['left'],
-                previous_ankles['left'] if previous_ankles else None,
-                'left'
-            )
-            right_contact = self._detect_foot_contact(
-                ankle_positions['right'],
-                foot_positions['right'],
-                previous_ankles['right'] if previous_ankles else None,
-                'right'
-            )
-
-            if left_contact or right_contact:
-                self.foot_contact_frames.append(i)
-
-            contact_overrides = {'left': left_contact, 'right': right_contact}
-
-            ik_result = self.ik_system.process_frame(
-                hip_positions,
-                knee_positions,
-                ankle_positions,
-                i,
-                previous_ankles,
-                contact_overrides
-            )
-
-            corrected_frame = {'left': ik_result['left'], 'right': ik_result['right']}
-            corrected.append(corrected_frame)
-
-            previous_ankles = {'left': ik_result['left']['ankle'], 'right': ik_result['right']['ankle']}
-
-        return corrected
-
     def _calculate_dynamic_ground_level(self, pose_frames: List[PoseFrame]) -> float:
         min_y = float('inf')
 
@@ -317,52 +178,6 @@ class ImprovedBVHConverter:
         if valid_frames == 0:
             return 0.0
         return min_y
-
-    def _detect_foot_contact(self, ankle_pos: np.ndarray, foot_pos: np.ndarray,
-                            prev_ankle: Optional[np.ndarray], side: str) -> bool:
-        foot_height = foot_pos[1] - self.ground_level if self.ground_level is not None else foot_pos[1]
-        ankle_height = ankle_pos[1] - self.ground_level if self.ground_level is not None else ankle_pos[1]
-        min_height = min(foot_height, ankle_height)
-
-        height_contact = min_height < self.ik_system.config.contact_height_threshold
-
-        velocity_contact = True
-        vertical_velocity_contact = True
-        if prev_ankle is not None:
-            velocity = ankle_pos - prev_ankle
-            velocity_mag = np.linalg.norm(velocity)
-            vertical_velocity = abs(velocity[1])
-            velocity_contact = velocity_mag < self.ik_system.config.contact_velocity_threshold
-            vertical_velocity_contact = vertical_velocity < self.ik_system.config.vertical_velocity_threshold
-
-        return height_contact and (velocity_contact or vertical_velocity_contact)
-
-    def _update_pose_frames_with_ik(self, pose_frames: List[PoseFrame], corrected_positions: List[Optional[Dict]]):
-        for frame, corrections in zip(pose_frames, corrected_positions):
-            if not frame.is_valid() or corrections is None:
-                continue
-
-            if corrections['left']['confidence'] > 0:
-                knee_pos = corrections['left']['knee'] / self.scale
-                frame.world_landmarks[mp_pose.PoseLandmark.LEFT_KNEE].x = knee_pos[0]
-                frame.world_landmarks[mp_pose.PoseLandmark.LEFT_KNEE].y = -knee_pos[1]
-                frame.world_landmarks[mp_pose.PoseLandmark.LEFT_KNEE].z = knee_pos[2]
-
-                ankle_pos = corrections['left']['ankle'] / self.scale
-                frame.world_landmarks[mp_pose.PoseLandmark.LEFT_ANKLE].x = ankle_pos[0]
-                frame.world_landmarks[mp_pose.PoseLandmark.LEFT_ANKLE].y = -ankle_pos[1]
-                frame.world_landmarks[mp_pose.PoseLandmark.LEFT_ANKLE].z = ankle_pos[2]
-
-            if corrections['right']['confidence'] > 0:
-                knee_pos = corrections['right']['knee'] / self.scale
-                frame.world_landmarks[mp_pose.PoseLandmark.RIGHT_KNEE].x = knee_pos[0]
-                frame.world_landmarks[mp_pose.PoseLandmark.RIGHT_KNEE].y = -knee_pos[1]
-                frame.world_landmarks[mp_pose.PoseLandmark.RIGHT_KNEE].z = knee_pos[2]
-
-                ankle_pos = corrections['right']['ankle'] / self.scale
-                frame.world_landmarks[mp_pose.PoseLandmark.RIGHT_ANKLE].x = ankle_pos[0]
-                frame.world_landmarks[mp_pose.PoseLandmark.RIGHT_ANKLE].y = -ankle_pos[1]
-                frame.world_landmarks[mp_pose.PoseLandmark.RIGHT_ANKLE].z = ankle_pos[2]
 
     def _validate_and_fix_landmarks(self, pose_frames: List[PoseFrame], max_shoulder_diff: float = 0.08) -> List[PoseFrame]:
         """
@@ -962,12 +777,11 @@ class ImprovedBVHConverter:
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Improved BVH Converter with optional FaceMesh head tracking")
+    parser = argparse.ArgumentParser(description="BVH Converter with optional FaceMesh head tracking")
     parser.add_argument("--video", required=True, help="Path to input video file")
     parser.add_argument("--output", required=True, help="Path to output BVH file")
     parser.add_argument("--preview", action="store_true", help="Show pose detection preview")
     parser.add_argument("--sample-rate", type=int, default=1, help="Process every Nth frame (default: 1 = every frame)")
-    parser.add_argument("--ik", action="store_true", help="Enable improved IK foot locking")
     parser.add_argument("--face", action="store_true", help="Enable MediaPipe FaceMesh for head orientation")
 
     args = parser.parse_args()
@@ -1000,7 +814,7 @@ def main():
             idx += 1
         cap.release()
 
-    converter = ImprovedBVHConverter(enable_ik=args.ik, enable_face=args.face)
+    converter = ImprovedBVHConverter(enable_face=args.face)
     try:
         success = converter.convert(pose_frames, args.output)
     finally:
