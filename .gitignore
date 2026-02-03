@@ -15,13 +15,11 @@ visual_accuracy_output/
 *.png
 !docs/*.png
 
-# Temporary BVH files from testing (keep main outputs)
-bvh/*_v[0-9].bvh
-bvh/*_v[0-9][0-9].bvh
-bvh/*_blended.bvh
-bvh/*_original.bvh
-bvh/*_final.bvh
-bvh/*_fixed.bvh
+# analysis folders
+frame_analysis/
+
+# we dont care about tracking outputs i dont think.
+bvh/
 
 # Python
 *.pyc

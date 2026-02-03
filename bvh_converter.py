@@ -123,6 +123,9 @@ class ImprovedBVHConverter:
             self._update_pose_frames_with_ik(pose_frames, corrected_positions)
             print(f"✅ Detected {len(self.foot_contact_frames)} foot contact frames")
 
+        print("Validating and fixing outlier landmarks...")
+        pose_frames = self._validate_and_fix_landmarks(pose_frames, max_shoulder_diff=0.05)
+
         print("Calculating joint rotations...")
         all_rotations = self._process_motion_improved(pose_frames)
 
@@ -361,6 +364,132 @@ class ImprovedBVHConverter:
                 frame.world_landmarks[mp_pose.PoseLandmark.RIGHT_ANKLE].y = -ankle_pos[1]
                 frame.world_landmarks[mp_pose.PoseLandmark.RIGHT_ANKLE].z = ankle_pos[2]
 
+    def _validate_and_fix_landmarks(self, pose_frames: List[PoseFrame], max_shoulder_diff: float = 0.08) -> List[PoseFrame]:
+        """
+        Detect and fix frames with outlier landmarks.
+
+        MediaPipe sometimes produces wildly incorrect landmark positions for certain frames.
+        This function:
+        1. Detects extreme outlier frames and interpolates from surrounding valid frames
+        2. Levels shoulder Y positions to fix systematic shoulder asymmetry bias
+
+        Args:
+            pose_frames: List of pose frames to validate
+            max_shoulder_diff: Maximum allowed Y difference between shoulders (in normalized coords)
+
+        Returns:
+            Fixed list of pose frames
+        """
+        if len(pose_frames) < 3:
+            return pose_frames
+
+        l_sh_idx = mp_pose.PoseLandmark.LEFT_SHOULDER
+        r_sh_idx = mp_pose.PoseLandmark.RIGHT_SHOULDER
+        l_hip_idx = mp_pose.PoseLandmark.LEFT_HIP
+        r_hip_idx = mp_pose.PoseLandmark.RIGHT_HIP
+
+        # First pass: identify extreme outlier frames (large shoulder difference)
+        extreme_threshold = max_shoulder_diff * 1.5  # More permissive for extreme outliers
+        is_outlier = [False] * len(pose_frames)
+
+        for i, frame in enumerate(pose_frames):
+            if not frame.is_valid():
+                continue
+
+            landmarks = frame.world_landmarks
+            l_sh_y = landmarks[l_sh_idx].y
+            r_sh_y = landmarks[r_sh_idx].y
+
+            # Check for extreme shoulder difference
+            shoulder_diff = abs(l_sh_y - r_sh_y)
+            if shoulder_diff > extreme_threshold:
+                is_outlier[i] = True
+
+        # Count and fix extreme outliers
+        num_outliers = sum(is_outlier)
+        if num_outliers > 0:
+            print(f"  Detected {num_outliers} extreme outlier frames - fixing with interpolation...")
+
+        # Second pass: fix extreme outlier frames by interpolation
+        for i in range(len(pose_frames)):
+            if not is_outlier[i]:
+                continue
+
+            if not pose_frames[i].is_valid():
+                continue
+
+            # Find previous valid (non-outlier) frame
+            prev_idx = i - 1
+            while prev_idx >= 0 and (is_outlier[prev_idx] or not pose_frames[prev_idx].is_valid()):
+                prev_idx -= 1
+
+            # Find next valid (non-outlier) frame
+            next_idx = i + 1
+            while next_idx < len(pose_frames) and (is_outlier[next_idx] or not pose_frames[next_idx].is_valid()):
+                next_idx += 1
+
+            # Interpolate landmarks
+            if prev_idx >= 0 and next_idx < len(pose_frames):
+                t = (i - prev_idx) / (next_idx - prev_idx)
+                prev_landmarks = pose_frames[prev_idx].world_landmarks
+                next_landmarks = pose_frames[next_idx].world_landmarks
+
+                for lm_idx in range(len(pose_frames[i].world_landmarks)):
+                    pose_frames[i].world_landmarks[lm_idx].x = (
+                        prev_landmarks[lm_idx].x * (1 - t) + next_landmarks[lm_idx].x * t
+                    )
+                    pose_frames[i].world_landmarks[lm_idx].y = (
+                        prev_landmarks[lm_idx].y * (1 - t) + next_landmarks[lm_idx].y * t
+                    )
+                    pose_frames[i].world_landmarks[lm_idx].z = (
+                        prev_landmarks[lm_idx].z * (1 - t) + next_landmarks[lm_idx].z * t
+                    )
+
+            elif prev_idx >= 0:
+                prev_landmarks = pose_frames[prev_idx].world_landmarks
+                for lm_idx in range(len(pose_frames[i].world_landmarks)):
+                    pose_frames[i].world_landmarks[lm_idx].x = prev_landmarks[lm_idx].x
+                    pose_frames[i].world_landmarks[lm_idx].y = prev_landmarks[lm_idx].y
+                    pose_frames[i].world_landmarks[lm_idx].z = prev_landmarks[lm_idx].z
+
+            elif next_idx < len(pose_frames):
+                next_landmarks = pose_frames[next_idx].world_landmarks
+                for lm_idx in range(len(pose_frames[i].world_landmarks)):
+                    pose_frames[i].world_landmarks[lm_idx].x = next_landmarks[lm_idx].x
+                    pose_frames[i].world_landmarks[lm_idx].y = next_landmarks[lm_idx].y
+                    pose_frames[i].world_landmarks[lm_idx].z = next_landmarks[lm_idx].z
+
+        # Third pass: level shoulders and hips in ALL frames to fix systematic bias
+        # This addresses MediaPipe's tendency to consistently detect one shoulder higher
+        leveled_count = 0
+        for i, frame in enumerate(pose_frames):
+            if not frame.is_valid():
+                continue
+
+            landmarks = frame.world_landmarks
+
+            # Level shoulders
+            l_sh_y = landmarks[l_sh_idx].y
+            r_sh_y = landmarks[r_sh_idx].y
+            if abs(l_sh_y - r_sh_y) > 0.01:  # Only adjust if there's noticeable difference
+                avg_sh_y = (l_sh_y + r_sh_y) / 2.0
+                landmarks[l_sh_idx].y = avg_sh_y
+                landmarks[r_sh_idx].y = avg_sh_y
+                leveled_count += 1
+
+            # Level hips
+            l_hip_y = landmarks[l_hip_idx].y
+            r_hip_y = landmarks[r_hip_idx].y
+            if abs(l_hip_y - r_hip_y) > 0.01:
+                avg_hip_y = (l_hip_y + r_hip_y) / 2.0
+                landmarks[l_hip_idx].y = avg_hip_y
+                landmarks[r_hip_idx].y = avg_hip_y
+
+        if leveled_count > 0:
+            print(f"  Leveled shoulders/hips in {leveled_count} frames")
+
+        return pose_frames
+
     def _process_motion_improved(self, pose_frames: List[PoseFrame]) -> List[Dict[str, np.ndarray]]:
         all_rotations = []
         for frame in pose_frames:
@@ -445,6 +574,20 @@ class ImprovedBVHConverter:
         out[0] = float(np.clip(out[0], min_pitch, max_pitch))
         return out
 
+    def _clamp_head_rotation(self, euler_xyz: np.ndarray) -> np.ndarray:
+        """
+        Clamp all head rotation axes to physically possible ranges.
+        Humans have limited head rotation:
+        - Pitch (X): ±45° (looking up/down)
+        - Yaw (Y): ±80° (looking left/right)
+        - Roll (Z): ±35° (tilting head side-to-side)
+        """
+        out = np.array(euler_xyz, dtype=float)
+        out[0] = float(np.clip(out[0], -45.0, 45.0))   # Pitch
+        out[1] = float(np.clip(out[1], -80.0, 80.0))   # Yaw
+        out[2] = float(np.clip(out[2], -35.0, 35.0))   # Roll
+        return out
+
     def _face_mesh_head_basis(self, frame: PoseFrame) -> Optional[Tuple[np.ndarray, np.ndarray, np.ndarray]]:
         if self._face_mesh is None:
             return None
@@ -515,7 +658,8 @@ class ImprovedBVHConverter:
         if head_global_euler is None:
             head_global_euler = self._calculate_head_global_rotation(landmarks, torso_basis)
             if head_global_euler is not None:
-                head_global_euler = self._clamp_head_pitch(head_global_euler, -45.0, 45.0)
+                # Clamp all head rotation axes to physically possible ranges
+                head_global_euler = self._clamp_head_rotation(head_global_euler)
 
         if head_global_euler is not None:
             head_global_rot = Rotation.from_euler('XYZ', head_global_euler, degrees=True)
@@ -597,13 +741,32 @@ class ImprovedBVHConverter:
             l_ear = np.array([landmarks[l_ear_idx].x, -landmarks[l_ear_idx].y, landmarks[l_ear_idx].z])
             r_ear = np.array([landmarks[r_ear_idx].x, -landmarks[r_ear_idx].y, landmarks[r_ear_idx].z])
 
+            # Sanity check: ear distance should be reasonable (0.05-0.3 in normalized coords)
+            ear_dist = np.linalg.norm(r_ear - l_ear)
+            if ear_dist < 0.02 or ear_dist > 0.5:
+                # Ears too close or too far apart - bad detection
+                return None
+
+            # Sanity check: nose should be in front of mid-ears (positive Z or reasonable distance)
+            mid_ears = (l_ear + r_ear) / 2.0
+            nose_to_midear_dist = np.linalg.norm(nose - mid_ears)
+            if nose_to_midear_dist < 0.01 or nose_to_midear_dist > 0.3:
+                # Nose too close or too far from ears - bad detection
+                return None
+
+            # Check that ears are roughly level (Y difference should be small)
+            ear_y_diff = abs(l_ear[1] - r_ear[1])
+            if ear_y_diff > 0.15:
+                # Ears at very different heights - likely bad detection or extreme head tilt
+                # Still calculate but be cautious
+                pass
+
             # Right vector: Right Ear - Left Ear
             right = self._safe_normalize(r_ear - l_ear)
             if right is None:
                 return None
 
             # Forward vector: Mid(Ears) to Nose
-            mid_ears = (l_ear + r_ear) / 2.0
             forward = self._safe_normalize(nose - mid_ears)
             if forward is None:
                 return None
@@ -612,6 +775,14 @@ class ImprovedBVHConverter:
             up = self._safe_normalize(np.cross(right, forward))
             if up is None:
                 return None
+
+            # Sanity check: up vector should generally point upward (positive Y)
+            # Allow some tolerance for looking down
+            if up[1] < -0.5:
+                # Up vector pointing strongly downward - something is wrong
+                # Flip it to maintain reasonable orientation
+                up = -up
+                forward = -forward
 
             # Re-orthogonalize forward
             forward = self._safe_normalize(np.cross(up, right))
@@ -627,6 +798,63 @@ class ImprovedBVHConverter:
             print(f"Error in head rotation calculation: {e}")
             return None
 
+    def _reject_outliers(self, rotations: np.ndarray, max_change: float = 45.0) -> np.ndarray:
+        """
+        Detect and replace outlier rotation values.
+
+        When rotation changes by more than max_change degrees between consecutive frames,
+        interpolate from surrounding valid frames instead.
+        """
+        result = rotations.copy()
+        n_frames = len(result)
+        if n_frames < 3:
+            return result
+
+        # Mark frames as outliers based on sudden changes
+        is_outlier = np.zeros(n_frames, dtype=bool)
+
+        for i in range(1, n_frames - 1):
+            # Check change from previous frame
+            prev_diff = np.max(np.abs(result[i] - result[i-1]))
+            next_diff = np.max(np.abs(result[i+1] - result[i]))
+
+            # If this frame differs greatly from both neighbors, it's an outlier
+            if prev_diff > max_change and next_diff > max_change:
+                is_outlier[i] = True
+
+        # Check first and last frames against their neighbors
+        if n_frames > 1:
+            if np.max(np.abs(result[0] - result[1])) > max_change * 2:
+                is_outlier[0] = True
+            if np.max(np.abs(result[-1] - result[-2])) > max_change * 2:
+                is_outlier[-1] = True
+
+        # Replace outliers with interpolated values
+        for i in range(n_frames):
+            if is_outlier[i]:
+                # Find nearest valid frames
+                prev_valid = i - 1
+                while prev_valid >= 0 and is_outlier[prev_valid]:
+                    prev_valid -= 1
+
+                next_valid = i + 1
+                while next_valid < n_frames and is_outlier[next_valid]:
+                    next_valid += 1
+
+                # Interpolate
+                if prev_valid >= 0 and next_valid < n_frames:
+                    # Interpolate between valid neighbors
+                    t = (i - prev_valid) / (next_valid - prev_valid)
+                    result[i] = result[prev_valid] * (1 - t) + result[next_valid] * t
+                elif prev_valid >= 0:
+                    # Use previous valid frame
+                    result[i] = result[prev_valid]
+                elif next_valid < n_frames:
+                    # Use next valid frame
+                    result[i] = result[next_valid]
+
+        return result
+
     def _smooth_motion(self, all_rotations: List[Dict[str, np.ndarray]]) -> List[Dict[str, np.ndarray]]:
         if not all_rotations:
             return all_rotations
@@ -638,8 +866,19 @@ class ImprovedBVHConverter:
             'mixamorig:Hips': 3, 'mixamorig:Spine2': 3, 'mixamorig:Neck': 2, 'mixamorig:Head': 2,
         }
 
+        # Joints that need outlier rejection (head/neck/spine chain most affected)
+        outlier_rejection_joints = {
+            'mixamorig:Head', 'mixamorig:Neck', 'mixamorig:Spine2', 'mixamorig:Spine1',
+            'mixamorig:Spine', 'mixamorig:LeftShoulder', 'mixamorig:RightShoulder'
+        }
+
         for joint_name in joint_names:
             joint_rotations = np.array([frame_rots[joint_name] for frame_rots in all_rotations])
+
+            # Apply outlier rejection for sensitive joints
+            if joint_name in outlier_rejection_joints:
+                joint_rotations = self._reject_outliers(joint_rotations, max_change=45.0)
+
             window_size = joint_smoothing.get(joint_name, SMOOTHING_CONFIG['temporal_window_size'])
 
             smoothed = smooth_rotations(
@@ -727,7 +966,7 @@ def main():
     parser.add_argument("--video", required=True, help="Path to input video file")
     parser.add_argument("--output", required=True, help="Path to output BVH file")
     parser.add_argument("--preview", action="store_true", help="Show pose detection preview")
-    parser.add_argument("--sample-rate", type=int, default=2, help="Process every Nth frame (default: 2)")
+    parser.add_argument("--sample-rate", type=int, default=1, help="Process every Nth frame (default: 1 = every frame)")
     parser.add_argument("--ik", action="store_true", help="Enable improved IK foot locking")
     parser.add_argument("--face", action="store_true", help="Enable MediaPipe FaceMesh for head orientation")
 
