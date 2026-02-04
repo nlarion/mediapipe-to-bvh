@@ -17,6 +17,8 @@ visual_accuracy_output/
 
 # analysis folders
 frame_analysis/
+analysis_output/
+comparison_videos/
 
 # we dont care about tracking outputs i dont think.
 bvh/

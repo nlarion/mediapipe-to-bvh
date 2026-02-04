@@ -360,7 +360,15 @@ class ImprovedBVHConverter:
             hip_center = (l_hip + r_hip) / 2.0
 
             left_axis = self._safe_normalize(l_sh - r_sh)
-            up_axis = self._safe_normalize(sh_center - hip_center)
+
+            # Calculate spine direction
+            spine_vec = sh_center - hip_center
+
+            # MediaPipe Z depth is unreliable - reduce its influence on spine direction
+            # This prevents excessive forward/backward lean from noisy depth data
+            spine_vec[2] *= 0.1  # Heavily dampen Z component
+
+            up_axis = self._safe_normalize(spine_vec)
             if left_axis is None or up_axis is None:
                 return None
 
@@ -479,6 +487,9 @@ class ImprovedBVHConverter:
         if head_global_euler is not None:
             head_global_rot = Rotation.from_euler('XYZ', head_global_euler, degrees=True)
 
+        # Joints in the spine chain where Z depth is unreliable
+        spine_chain_joints = {'mixamorig:Hips', 'mixamorig:Spine', 'mixamorig:Spine1', 'mixamorig:Spine2'}
+
         def get_bone_direction(joint_name: str, child_name: str) -> Optional[np.ndarray]:
             # Use raw positions for rotation calculations
             # (Shoulder leveling is applied in skeleton offsets, not rotations)
@@ -486,6 +497,12 @@ class ImprovedBVHConverter:
             child_pos = self.skeleton_mapper.get_joint_position(child_name, landmarks, self.scale)
             if parent_pos is not None and child_pos is not None:
                 direction = child_pos - parent_pos
+
+                # MediaPipe Z depth is unreliable for spine chain joints
+                # Dampen Z component to prevent excessive forward/backward lean
+                if joint_name in spine_chain_joints:
+                    direction[2] *= 0.1  # Heavily dampen Z for spine chain
+
                 if np.linalg.norm(direction) > 1e-10:
                     return direction / np.linalg.norm(direction)
             return None
@@ -497,9 +514,25 @@ class ImprovedBVHConverter:
             calculated_euler = None
             is_global = False
 
-            if joint.name == "mixamorig:Spine2" and chest_global_rot is not None:
-                calculated_euler = chest_global_euler
-                is_global = True
+            if joint.name == "mixamorig:Hips":
+                # Root joint: constrain forward/backward lean (X rotation)
+                # MediaPipe Z depth causes excessive forward lean in the Hips-to-Spine direction
+                if joint.children:
+                    child = joint.children[0]
+                    direction = get_bone_direction(joint.name, child.name)
+                    if direction is not None and np.linalg.norm(child.offset) > 0:
+                        rest_direction = child.offset / np.linalg.norm(child.offset)
+                        calculated_euler = calculate_rotation_from_directions(rest_direction, direction, order='XYZ')
+                        # Clamp X rotation (pitch) to ±15° to prevent excessive forward lean
+                        if calculated_euler is not None:
+                            calculated_euler[0] = np.clip(calculated_euler[0], -15.0, 15.0)
+                        is_global = True
+
+            elif joint.name == "mixamorig:Spine2" and chest_global_rot is not None:
+                # Skip applying chest rotation - let bone directions handle it
+                # calculated_euler = chest_global_euler
+                # is_global = True
+                pass
 
             elif joint.name == "mixamorig:Neck" and chest_global_rot is not None and head_global_rot is not None:
                 neck_local = chest_global_rot.inv() * head_global_rot
@@ -517,8 +550,11 @@ class ImprovedBVHConverter:
                 direction = get_bone_direction(joint.name, child.name)
                 if direction is not None and np.linalg.norm(child.offset) > 0:
                     rest_direction = child.offset / np.linalg.norm(child.offset)
-                    calculated_euler = calculate_rotation_from_directions(rest_direction, direction, order='XYZ')
-                    is_global = True
+                    # Transform world direction to local space of parent
+                    # Local rotation L should satisfy: L * rest_direction = direction_local
+                    direction_local = parent_rotation.inv().apply(direction)
+                    calculated_euler = calculate_rotation_from_directions(rest_direction, direction_local, order='XYZ')
+                    is_global = False  # This is now a local rotation
 
             if calculated_euler is not None:
                 if is_global:

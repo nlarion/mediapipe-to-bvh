@@ -280,6 +280,21 @@ class SkeletonMapper:
                     if level_shoulder_y is not None:
                         offset[1] = level_shoulder_y
 
+                # ARM OFFSETS: Force T-pose direction for arm bones
+                # The reference frame may have arms in any pose (guard, etc.), but
+                # BVH rest pose should be T-pose with arms pointing to the side
+                if joint.name in ('mixamorig:LeftArm', 'mixamorig:LeftForeArm', 'mixamorig:LeftHand'):
+                    bone_length = np.linalg.norm(offset)
+                    default_dir = self.default_offsets.get(joint.name, np.array([10, -2, 0]))
+                    default_dir_norm = default_dir / np.linalg.norm(default_dir)
+                    offset = default_dir_norm * bone_length
+
+                if joint.name in ('mixamorig:RightArm', 'mixamorig:RightForeArm', 'mixamorig:RightHand'):
+                    bone_length = np.linalg.norm(offset)
+                    default_dir = self.default_offsets.get(joint.name, np.array([-10, -2, 0]))
+                    default_dir_norm = default_dir / np.linalg.norm(default_dir)
+                    offset = default_dir_norm * bone_length
+
                 joint.set_offset(offset)
             else:
                 joint.set_offset(self.default_offsets.get(joint.name, np.array([0, 5, 0])))
