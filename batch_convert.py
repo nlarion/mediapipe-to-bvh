@@ -19,16 +19,6 @@ import numpy as np
 import cv2
 import mediapipe as mp
 
-# Plotly for BVH rendering
-try:
-    import plotly.graph_objects as go
-    import plotly.io as pio
-    from PIL import Image
-    from io import BytesIO
-    HAS_PLOTLY = True
-except ImportError:
-    HAS_PLOTLY = False
-
 
 class BVHParser:
     """Simple BVH parser for skeleton extraction."""
@@ -239,83 +229,62 @@ class ComparisonVideoGenerator:
 
     def render_bvh_frame(self, bvh: BVHParser, frame_idx: int,
                          img_size: tuple = (640, 480)) -> np.ndarray:
-        """Render BVH skeleton for a specific frame using Plotly."""
+        """Render BVH skeleton for a specific frame using OpenCV (very fast).
+
+        Uses simple 2D projection from front view (X, Y in BVH space).
+        """
         positions = bvh.get_frame_positions(frame_idx)
 
-        if not positions or not HAS_PLOTLY:
+        if not positions:
             return np.ones((img_size[1], img_size[0], 3), dtype=np.uint8) * 255
 
+        # Get bounds for scaling
         pos_array = np.array(list(positions.values()))
-        center = pos_array.mean(axis=0)
-        max_range = np.max(np.abs(pos_array - center)) * 1.5
-        if max_range < 1:
-            max_range = 100
+        min_x, min_y = pos_array[:, 0].min(), pos_array[:, 1].min()
+        max_x, max_y = pos_array[:, 0].max(), pos_array[:, 1].max()
 
-        points_x, points_y, points_z = [], [], []
-        lines_x, lines_y, lines_z = [], [], []
+        # Add padding
+        pad = 20
+        range_x = max(max_x - min_x, 1)
+        range_y = max(max_y - min_y, 1)
 
+        # Scale to fit image while maintaining aspect ratio
+        scale = min((img_size[0] - 2*pad) / range_x, (img_size[1] - 2*pad) / range_y)
+
+        # Center offset
+        center_x = (min_x + max_x) / 2
+        center_y = (min_y + max_y) / 2
+
+        def to_pixel(pos):
+            # BVH: X right, Y up, Z forward
+            # Image: X right, Y down
+            # Flip X to fix mirroring (match video view)
+            px = int(img_size[0]/2 - (pos[0] - center_x) * scale)  # Flip X
+            py = int(img_size[1]/2 - (pos[1] - center_y) * scale)  # Flip Y (up to down)
+            return (px, py)
+
+        # Create white background
+        img = np.ones((img_size[1], img_size[0], 3), dtype=np.uint8) * 255
+
+        # Draw bones first (so joints appear on top)
         for joint_name, pos in positions.items():
-            points_x.append(pos[0])
-            points_y.append(pos[1])
-            points_z.append(pos[2])
-
             joint = bvh.joints[joint_name]
-            if joint['parent']:
+            if joint['parent'] and joint['parent'] in positions:
                 parent_pos = positions[joint['parent']]
-                lines_x.extend([pos[0], parent_pos[0], None])
-                lines_y.extend([pos[1], parent_pos[1], None])
-                lines_z.extend([pos[2], parent_pos[2], None])
+                pt1 = to_pixel(pos)
+                pt2 = to_pixel(parent_pos)
+                cv2.line(img, pt1, pt2, (0, 0, 255), 2)  # Red lines
 
-        fig = go.Figure()
+        # Draw joints
+        for joint_name, pos in positions.items():
+            pt = to_pixel(pos)
+            cv2.circle(img, pt, 4, (255, 0, 0), -1)  # Blue circles
 
-        fig.add_trace(go.Scatter3d(
-            x=points_x, y=points_y, z=points_z,
-            mode='markers',
-            marker=dict(size=6, color='blue'),
-            hoverinfo='none',
-            showlegend=False
-        ))
-
-        fig.add_trace(go.Scatter3d(
-            x=lines_x, y=lines_y, z=lines_z,
-            mode='lines',
-            line=dict(color='red', width=4),
-            hoverinfo='none',
-            showlegend=False
-        ))
-
-        fig.update_layout(
-            scene=dict(
-                xaxis=dict(range=[center[0] - max_range, center[0] + max_range], title=''),
-                yaxis=dict(range=[center[1] - max_range, center[1] + max_range], title=''),
-                zaxis=dict(range=[center[2] - max_range, center[2] + max_range], title=''),
-                aspectmode='cube',
-                camera=dict(
-                    eye=dict(x=0, y=0, z=-2.5),
-                    center=dict(x=0, y=0, z=0),
-                    up=dict(x=0, y=1, z=0)
-                )
-            ),
-            margin=dict(l=0, r=0, b=0, t=0),
-            width=img_size[0],
-            height=img_size[1],
-        )
-
-        img_bytes = pio.to_image(fig, format='png', width=img_size[0], height=img_size[1])
-        img_array = np.array(Image.open(BytesIO(img_bytes)))
-
-        if img_array.shape[2] == 4:
-            img_array = img_array[:, :, :3]
-
-        return img_array
+        return img
 
     def generate_comparison_video(self, video_path: str, bvh_path: str,
                                    output_path: str, max_frames: Optional[int] = None):
         """Generate side-by-side comparison video."""
-        if not HAS_PLOTLY:
-            print("    Plotly not available - skipping comparison video")
-            return False
-
         cap = cv2.VideoCapture(video_path)
         fps = cap.get(cv2.CAP_PROP_FPS)
         total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
