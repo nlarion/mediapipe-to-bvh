@@ -203,21 +203,28 @@ class ImprovedBVHConverter:
         l_hip_idx = mp_pose.PoseLandmark.LEFT_HIP
         r_hip_idx = mp_pose.PoseLandmark.RIGHT_HIP
 
-        # First pass: identify extreme outlier frames (large shoulder difference)
-        extreme_threshold = max_shoulder_diff * 1.5  # More permissive for extreme outliers
+        # First pass: identify extreme outlier frames using velocity-based detection
+        # Shoulder height difference alone is NOT a good outlier signal because
+        # arm raises naturally cause one shoulder to be higher than the other.
+        # Instead, detect frames where ALL landmarks jump suddenly (bad tracking).
         is_outlier = [False] * len(pose_frames)
 
-        for i, frame in enumerate(pose_frames):
-            if not frame.is_valid():
+        for i in range(1, len(pose_frames)):
+            if not pose_frames[i].is_valid() or not pose_frames[i-1].is_valid():
                 continue
 
-            landmarks = frame.world_landmarks
-            l_sh_y = landmarks[l_sh_idx].y
-            r_sh_y = landmarks[r_sh_idx].y
-
-            # Check for extreme shoulder difference
-            shoulder_diff = abs(l_sh_y - r_sh_y)
-            if shoulder_diff > extreme_threshold:
+            # Check if multiple key landmarks jumped significantly between frames
+            curr_lm = pose_frames[i].world_landmarks
+            prev_lm = pose_frames[i-1].world_landmarks
+            big_jumps = 0
+            for idx in [l_sh_idx, r_sh_idx, l_hip_idx, r_hip_idx]:
+                dx = abs(curr_lm[idx].x - prev_lm[idx].x)
+                dy = abs(curr_lm[idx].y - prev_lm[idx].y)
+                dz = abs(curr_lm[idx].z - prev_lm[idx].z)
+                if max(dx, dy, dz) > 0.15:  # Large jump in any axis
+                    big_jumps += 1
+            # Only flag as outlier if 3+ key landmarks jumped (whole body glitch)
+            if big_jumps >= 3:
                 is_outlier[i] = True
 
         # Count and fix extreme outliers
@@ -274,8 +281,7 @@ class ImprovedBVHConverter:
                     pose_frames[i].world_landmarks[lm_idx].y = next_landmarks[lm_idx].y
                     pose_frames[i].world_landmarks[lm_idx].z = next_landmarks[lm_idx].z
 
-        # Third pass: level shoulders and hips in ALL frames to fix systematic bias
-        # This addresses MediaPipe's tendency to consistently detect one shoulder higher
+        # Third pass: level hips only (NOT shoulders - shoulder height changes with arm raises)
         leveled_count = 0
         for i, frame in enumerate(pose_frames):
             if not frame.is_valid():
@@ -283,25 +289,17 @@ class ImprovedBVHConverter:
 
             landmarks = frame.world_landmarks
 
-            # Level shoulders
-            l_sh_y = landmarks[l_sh_idx].y
-            r_sh_y = landmarks[r_sh_idx].y
-            if abs(l_sh_y - r_sh_y) > 0.01:  # Only adjust if there's noticeable difference
-                avg_sh_y = (l_sh_y + r_sh_y) / 2.0
-                landmarks[l_sh_idx].y = avg_sh_y
-                landmarks[r_sh_idx].y = avg_sh_y
-                leveled_count += 1
-
-            # Level hips
+            # Level hips only - hips should stay relatively level for most poses
             l_hip_y = landmarks[l_hip_idx].y
             r_hip_y = landmarks[r_hip_idx].y
             if abs(l_hip_y - r_hip_y) > 0.01:
                 avg_hip_y = (l_hip_y + r_hip_y) / 2.0
                 landmarks[l_hip_idx].y = avg_hip_y
                 landmarks[r_hip_idx].y = avg_hip_y
+                leveled_count += 1
 
         if leveled_count > 0:
-            print(f"  Leveled shoulders/hips in {leveled_count} frames")
+            print(f"  Leveled hips in {leveled_count} frames")
 
         return pose_frames
 
@@ -344,17 +342,17 @@ class ImprovedBVHConverter:
                               -landmarks[mp_pose.PoseLandmark.RIGHT_HIP].y,
                               landmarks[mp_pose.PoseLandmark.RIGHT_HIP].z])
 
-            # Level shoulders to reduce noise-induced asymmetry
-            if level_shoulders:
-                # Average the Y (height) of shoulders to make them level
-                avg_shoulder_y = (l_sh[1] + r_sh[1]) / 2.0
-                l_sh[1] = avg_shoulder_y
-                r_sh[1] = avg_shoulder_y
+            # Level shoulders AND hips for torso basis calculation only
+            # (raw landmarks are NOT leveled, preserving arm-raise data)
+            # Torso basis needs leveled shoulders for stable trunk orientation,
+            # otherwise one raised arm tilts the entire torso reference frame
+            avg_shoulder_y = (l_sh[1] + r_sh[1]) / 2.0
+            l_sh[1] = avg_shoulder_y
+            r_sh[1] = avg_shoulder_y
 
-                # Also level the hips
-                avg_hip_y = (l_hip[1] + r_hip[1]) / 2.0
-                l_hip[1] = avg_hip_y
-                r_hip[1] = avg_hip_y
+            avg_hip_y = (l_hip[1] + r_hip[1]) / 2.0
+            l_hip[1] = avg_hip_y
+            r_hip[1] = avg_hip_y
 
             sh_center = (l_sh + r_sh) / 2.0
             hip_center = (l_hip + r_hip) / 2.0
@@ -528,11 +526,15 @@ class ImprovedBVHConverter:
                             calculated_euler[0] = np.clip(calculated_euler[0], -15.0, 15.0)
                         is_global = True
 
-            elif joint.name == "mixamorig:Spine2" and chest_global_rot is not None:
-                # Skip applying chest rotation - let bone directions handle it
-                # calculated_euler = chest_global_euler
-                # is_global = True
-                pass
+            elif joint.name == "mixamorig:Spine2":
+                # Apply chest orientation from torso basis as Spine2's global rotation.
+                # This is critical: shoulder joints calculate their local rotations
+                # relative to chest_global_rot, so the BVH chain's Spine2 global
+                # must match. Otherwise there's a reference frame mismatch and
+                # arms point in the wrong direction.
+                if chest_global_rot is not None:
+                    calculated_euler = chest_global_rot.as_euler('XYZ', degrees=True)
+                    is_global = True
 
             elif joint.name == "mixamorig:Neck" and chest_global_rot is not None and head_global_rot is not None:
                 neck_local = chest_global_rot.inv() * head_global_rot
@@ -717,10 +719,11 @@ class ImprovedBVHConverter:
             'mixamorig:Hips': 3, 'mixamorig:Spine2': 3, 'mixamorig:Neck': 2, 'mixamorig:Head': 2,
         }
 
-        # Joints that need outlier rejection (head/neck/spine chain most affected)
+        # Joints that need outlier rejection (head/neck/spine chain only)
+        # Do NOT include shoulder joints - they need full range for arm movements
         outlier_rejection_joints = {
             'mixamorig:Head', 'mixamorig:Neck', 'mixamorig:Spine2', 'mixamorig:Spine1',
-            'mixamorig:Spine', 'mixamorig:LeftShoulder', 'mixamorig:RightShoulder'
+            'mixamorig:Spine'
         }
 
         for joint_name in joint_names:

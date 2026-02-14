@@ -256,10 +256,10 @@ class ComparisonVideoGenerator:
         center_y = (min_y + max_y) / 2
 
         def to_pixel(pos):
-            # BVH: X right, Y up, Z forward
+            # BVH: positive X = character's left, Y up, Z forward
             # Image: X right, Y down
-            # Flip X to fix mirroring (match video view)
-            px = int(img_size[0]/2 - (pos[0] - center_x) * scale)  # Flip X
+            # Front view: character's left (positive X) appears on viewer's right
+            px = int(img_size[0]/2 + (pos[0] - center_x) * scale)  # No flip - front view
             py = int(img_size[1]/2 - (pos[1] - center_y) * scale)  # Flip Y (up to down)
             return (px, py)
 

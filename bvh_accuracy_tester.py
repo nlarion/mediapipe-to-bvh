@@ -368,17 +368,65 @@ class AccuracyTester:
 
     def render_bvh_frame(self, bvh: BVHParser, frame_idx: int,
                          img_size: Tuple[int, int] = (640, 480)) -> np.ndarray:
-        """Render BVH skeleton for a specific frame using Plotly (matching bvh_viewer)."""
+        """Render BVH skeleton for a specific frame using OpenCV (fast, matches batch_convert)."""
         positions = bvh.get_frame_positions(frame_idx)
 
         if not positions:
-            # Return blank image
             return np.ones((img_size[1], img_size[0], 3), dtype=np.uint8) * 255
 
-        if HAS_PLOTLY:
-            return self._render_with_plotly(bvh, positions, frame_idx, img_size)
-        else:
-            return self._render_with_matplotlib(bvh, positions, frame_idx, img_size)
+        # Use fast OpenCV 2D rendering (same as batch_convert.py)
+        return self._render_with_opencv(bvh, positions, frame_idx, img_size)
+
+    def _render_with_opencv(self, bvh: BVHParser, positions: Dict[str, np.ndarray],
+                            frame_idx: int, img_size: Tuple[int, int]) -> np.ndarray:
+        """Render using OpenCV 2D projection (fast, matches batch_convert)."""
+        # Get bounds for scaling
+        pos_array = np.array(list(positions.values()))
+        min_x, min_y = pos_array[:, 0].min(), pos_array[:, 1].min()
+        max_x, max_y = pos_array[:, 0].max(), pos_array[:, 1].max()
+
+        # Add padding
+        pad = 20
+        range_x = max(max_x - min_x, 1)
+        range_y = max(max_y - min_y, 1)
+
+        # Scale to fit image while maintaining aspect ratio
+        scale = min((img_size[0] - 2*pad) / range_x, (img_size[1] - 2*pad) / range_y)
+
+        # Center offset
+        center_x = (min_x + max_x) / 2
+        center_y = (min_y + max_y) / 2
+
+        def to_pixel(pos):
+            # BVH: positive X = character's left, Y up, Z forward
+            # Image: X right, Y down
+            # Front view: character's left (positive X) appears on viewer's right
+            px = int(img_size[0]/2 + (pos[0] - center_x) * scale)  # No flip - front view
+            py = int(img_size[1]/2 - (pos[1] - center_y) * scale)  # Flip Y (up to down)
+            return (px, py)
+
+        # Create white background
+        img = np.ones((img_size[1], img_size[0], 3), dtype=np.uint8) * 255
+
+        # Draw bones first (so joints appear on top)
+        for joint_name, pos in positions.items():
+            joint = bvh.joints[joint_name]
+            if joint['parent'] and joint['parent'] in positions:
+                parent_pos = positions[joint['parent']]
+                pt1 = to_pixel(pos)
+                pt2 = to_pixel(parent_pos)
+                cv2.line(img, pt1, pt2, (0, 0, 255), 2)  # Red lines (BGR)
+
+        # Draw joints
+        for joint_name, pos in positions.items():
+            pt = to_pixel(pos)
+            cv2.circle(img, pt, 4, (255, 0, 0), -1)  # Blue circles (BGR)
+
+        # Add frame label
+        cv2.putText(img, f"BVH Frame {frame_idx}", (10, 25),
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 0), 2)
+
+        return img
 
     def _render_with_plotly(self, bvh: BVHParser, positions: Dict[str, np.ndarray],
                             frame_idx: int, img_size: Tuple[int, int]) -> np.ndarray:

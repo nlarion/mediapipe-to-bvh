@@ -149,16 +149,20 @@ class SkeletonMapper:
                     mp_pose.PoseLandmark.RIGHT_EAR],
 
             # Left arm (Shoulder = clavicle in Mixamo)
+            # BVH bone chain: LeftShoulder(clavicle) → LeftArm(upper arm) → LeftForeArm(forearm) → LeftHand
+            # Each joint maps to where it IS anatomically, not where its child is.
+            # LeftShoulder and LeftArm both at shoulder (MediaPipe has no clavicle landmark,
+            # so clavicle gets default offset and zero rotation)
             'mixamorig:LeftShoulder': [mp_pose.PoseLandmark.LEFT_SHOULDER],
-            'mixamorig:LeftArm': [mp_pose.PoseLandmark.LEFT_ELBOW],
-            'mixamorig:LeftForeArm': [mp_pose.PoseLandmark.LEFT_WRIST],
+            'mixamorig:LeftArm': [mp_pose.PoseLandmark.LEFT_SHOULDER],
+            'mixamorig:LeftForeArm': [mp_pose.PoseLandmark.LEFT_ELBOW],
             'mixamorig:LeftHand': [mp_pose.PoseLandmark.LEFT_WRIST, mp_pose.PoseLandmark.LEFT_PINKY,
                         mp_pose.PoseLandmark.LEFT_INDEX],
 
             # Right arm
             'mixamorig:RightShoulder': [mp_pose.PoseLandmark.RIGHT_SHOULDER],
-            'mixamorig:RightArm': [mp_pose.PoseLandmark.RIGHT_ELBOW],
-            'mixamorig:RightForeArm': [mp_pose.PoseLandmark.RIGHT_WRIST],
+            'mixamorig:RightArm': [mp_pose.PoseLandmark.RIGHT_SHOULDER],
+            'mixamorig:RightForeArm': [mp_pose.PoseLandmark.RIGHT_ELBOW],
             'mixamorig:RightHand': [mp_pose.PoseLandmark.RIGHT_WRIST, mp_pose.PoseLandmark.RIGHT_PINKY,
                          mp_pose.PoseLandmark.RIGHT_INDEX],
 
