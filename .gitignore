@@ -40,6 +40,9 @@ build/
 # Debug/verification logs
 verify_log*.txt
 
+# Environment / secrets
+.env
+
 # OS
 .DS_Store
 Thumbs.db
