@@ -230,18 +230,22 @@ class MediaPipeExtractor:
         """
         best_idx = 0
         best_score = 0.0
-        
-        for i in range(min(len(pose_frames), max_frames)):
+
+        for i in range(len(pose_frames)):
             if pose_frames[i].is_valid():
                 score = pose_frames[i].detection_confidence
                 if score > best_score:
                     best_score = score
                     best_idx = i
-                    
+
                     # If we found a perfect frame, stop searching
                     if score >= 1.0:
                         break
-        
+            # Prefer an early frame, but keep scanning the whole clip if the
+            # person hasn't entered the frame yet (nothing valid so far)
+            if i >= max_frames - 1 and best_score > 0.0:
+                break
+
         print(f"Using frame {best_idx} as reference (confidence: {best_score:.2f})")
         return best_idx
     

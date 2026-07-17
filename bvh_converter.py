@@ -834,6 +834,17 @@ def main():
         if not pose_frames:
             print("Error: No poses extracted from video")
             return
+        # Trim leading/trailing frames with no confident detection (person
+        # walking into / out of frame) so the BVH doesn't start or end frozen
+        valid_idx = [i for i, f in enumerate(pose_frames) if f.is_valid()]
+        if not valid_idx:
+            print("Error: no frames with a confident pose detection")
+            return
+        first, last = valid_idx[0], valid_idx[-1]
+        if first > 0 or last < len(pose_frames) - 1:
+            print(f"Trimming {first} leading and {len(pose_frames) - 1 - last} "
+                  f"trailing frames without a detected person")
+            pose_frames = pose_frames[first:last + 1]
         pose_frames = extractor.interpolate_missing_frames(pose_frames)
 
     if args.face:
