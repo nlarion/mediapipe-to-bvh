@@ -4,6 +4,8 @@ __pycache__*
 __pycache__/*
 easy_ViTPose
 .aider*
+bvh_archive/*
+videos/*
 
 # Visual accuracy testing outputs
 tuning_output/

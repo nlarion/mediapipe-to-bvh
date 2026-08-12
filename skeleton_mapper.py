@@ -233,11 +233,64 @@ class SkeletonMapper:
             return np.mean(positions, axis=0)
         return None
     
-    def calculate_bone_offsets(self, reference_landmarks, scale=100.0):
+    def measure_bone_lengths(self, pose_frames, scale=100.0):
+        """Median bone length per joint across every frame that resolves it.
+
+        A single reference frame is a fragile source for bone lengths: one
+        occluded limb makes get_joint_position() return None and the offset
+        falls back to a small fixed default, permanently deforming the
+        skeleton for the whole clip. Sampling every frame and taking the
+        median survives momentary occlusion.
+
+        Left/right pairs are then averaged, since a real body is symmetric and
+        one side is often the camera-far side for an entire take.
+        """
+        samples = {}
+        for frame in pose_frames:
+            # Must match what calculate_bone_offsets() is given, which is the
+            # metric world landmarks — normalized image coords are a different
+            # space and would produce meaningless lengths.
+            lms = getattr(frame, 'world_landmarks', None)
+            if not lms or not frame.is_valid():
+                continue
+            for joint in self.get_all_joints():
+                if not joint.parent:
+                    continue
+                jp = self.get_joint_position(joint.name, lms, scale)
+                pp = self.get_joint_position(joint.parent.name, lms, scale)
+                if jp is None or pp is None:
+                    continue
+                length = float(np.linalg.norm(jp - pp))
+                if length > 1.0:
+                    samples.setdefault(joint.name, []).append(length)
+
+        lengths = {name: float(np.median(vals)) for name, vals in samples.items()}
+
+        # Mirror across the body. Iterate over every joint rather than only the
+        # measured ones: a limb that is camera-far for the entire take never
+        # gets a sample at all, and that is exactly the case that produced
+        # stunted default-sized bones.
+        for joint in self.get_all_joints():
+            if 'Left' not in joint.name:
+                continue
+            left, right = joint.name, joint.name.replace('Left', 'Right')
+            lv, rv = lengths.get(left), lengths.get(right)
+            if lv and rv:
+                lengths[left] = lengths[right] = (lv + rv) / 2.0
+            elif lv or rv:
+                lengths[left] = lengths[right] = lv or rv
+
+        return lengths
+
+    def calculate_bone_offsets(self, reference_landmarks, scale=100.0,
+                               bone_lengths=None):
         """Calculate bone offsets from a reference pose.
 
         Args:
             reference_landmarks: MediaPipe landmarks from reference frame
+            bone_lengths: optional {joint_name: length} from
+                measure_bone_lengths(). Directions still come from the
+                reference frame; only the magnitudes are taken from here.
             scale: Scale factor for unit conversion
         """
         # Calculate average shoulder Y offset from MediaPipe data
@@ -257,6 +310,16 @@ class SkeletonMapper:
             if avg_abs_y > 0.5:  # At least 0.5 units
                 level_shoulder_y = avg_abs_y
 
+        def apply_measured_length(joint, offset):
+            """Rescale an offset to the clip-wide median length for that bone."""
+            target = (bone_lengths or {}).get(joint.name)
+            if not target:
+                return offset
+            current = np.linalg.norm(offset)
+            if current < 1e-6:
+                return offset
+            return offset / current * target
+
         def set_joint_offset(joint, parent_pos, joint_pos):
             """Helper to set joint offset from positions."""
             if parent_pos is not None and joint_pos is not None:
@@ -266,6 +329,10 @@ class SkeletonMapper:
                 if length < 1.0:  # Minimum 1cm
                     default = self.default_offsets.get(joint.name, np.array([0, 5, 0]))
                     offset = default
+                # Keep the reference frame's direction but use the robust length,
+                # so a noisy or partly-occluded reference frame cannot set an
+                # arm or leg to the wrong size for the whole clip.
+                offset = apply_measured_length(joint, offset)
 
                 # CRITICAL FIX: Force Neck and Head offsets to be vertical in rest pose
                 # MediaPipe ear positions are behind shoulders (large negative Z),
@@ -301,7 +368,12 @@ class SkeletonMapper:
 
                 joint.set_offset(offset)
             else:
-                joint.set_offset(self.default_offsets.get(joint.name, np.array([0, 5, 0])))
+                # The reference frame could not resolve this joint (usually an
+                # occluded far-side limb). Keep the default direction, but take
+                # the length from the frames where it WAS visible rather than
+                # emitting a stunted default-sized bone.
+                default = self.default_offsets.get(joint.name, np.array([0, 5, 0]))
+                joint.set_offset(apply_measured_length(joint, default))
 
         def process_joint(joint):
             """Recursively process joint hierarchy."""

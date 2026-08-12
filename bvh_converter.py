@@ -29,9 +29,13 @@ mp_face_mesh = mp.solutions.face_mesh
 class ImprovedBVHConverter:
     """BVH converter for MediaPipe pose to Mixamo skeleton."""
 
-    def __init__(self, enable_face: bool = False):
+    def __init__(self, enable_face: bool = False, fps: float = None,
+                 frame_size: Tuple[int, int] = None):
         self.skeleton_mapper = SkeletonMapper()
-        self.frame_time = 1.0 / BVH_CONFIG['fps']
+        self.frame_width, self.frame_height = frame_size or (None, None)
+        # Match the source video's playback rate; fall back to the config value
+        # only when the video's FPS could not be read.
+        self.frame_time = 1.0 / (fps or BVH_CONFIG['fps'])
         self.rotation_order = BVH_CONFIG['rotation_order']
         self.scale = PROCESSING_CONFIG['scale_factor']
         self.enable_face = enable_face
@@ -68,7 +72,10 @@ class ImprovedBVHConverter:
 
         print("Setting up skeleton from reference frame...")
         ref_landmarks = pose_frames[ref_idx].world_landmarks
-        self.skeleton_mapper.calculate_bone_offsets(ref_landmarks, self.scale)
+        bone_lengths = self.skeleton_mapper.measure_bone_lengths(pose_frames, self.scale)
+        print(f"  measured {len(bone_lengths)} bone lengths across {len(pose_frames)} frames")
+        self.skeleton_mapper.calculate_bone_offsets(ref_landmarks, self.scale,
+                                                    bone_lengths=bone_lengths)
 
         print("Calculating dynamic ground level...")
         self.ground_level = self._calculate_dynamic_ground_level(pose_frames)
@@ -114,31 +121,85 @@ class ImprovedBVHConverter:
     def _calculate_root_motion_from_feet(self, pose_frames: List[PoseFrame]) -> List[np.ndarray]:
         """
         Root translation baseline:
-        - Uses MediaPipe world hip center as root translation (scaled, Y flipped).
-        - Applies optional temporal smoothing.
+        - Horizontal travel comes from the normalized (image-space) hip center.
+          MediaPipe's world landmarks are hip-centred by definition, so their
+          hip center is always ~(0,0,0) and carries no global translation.
+        - Image-space pixels are converted to BVH units per frame using the
+          subject's own torso as a ruler, which keeps the scale correct as
+          perspective changes with distance from the camera.
+        - Vertical motion still comes from the world landmarks, which measure
+          hip height relative to the body correctly.
         """
         positions: List[np.ndarray] = []
 
         l_hip_idx = mp_pose.PoseLandmark.LEFT_HIP
         r_hip_idx = mp_pose.PoseLandmark.RIGHT_HIP
+        l_sho_idx = mp_pose.PoseLandmark.LEFT_SHOULDER
+        r_sho_idx = mp_pose.PoseLandmark.RIGHT_SHOULDER
 
         default_root = np.array([0.0, float(BVH_CONFIG.get('root_height', 60.0)), 0.0], dtype=float)
 
+        width = float(self.frame_width or 1.0)
+        height = float(self.frame_height or 1.0)
+
+        # Pass 1: hip center in pixels, and units-per-pixel from the torso.
+        hips_px: List[Optional[np.ndarray]] = []
+        units_per_px: List[Optional[float]] = []
+        world_y: List[Optional[float]] = []
+
         for frame in pose_frames:
-            if not frame.is_valid() or not getattr(frame, "world_landmarks", None):
+            lm = getattr(frame, "landmarks", None)
+            wl = getattr(frame, "world_landmarks", None)
+            if not frame.is_valid() or not lm or not wl:
+                hips_px.append(None)
+                units_per_px.append(None)
+                world_y.append(None)
+                continue
+
+            hip_px = np.array([
+                (lm[l_hip_idx].x + lm[r_hip_idx].x) * 0.5 * width,
+                (lm[l_hip_idx].y + lm[r_hip_idx].y) * 0.5 * height,
+            ], dtype=float)
+            sho_px = np.array([
+                (lm[l_sho_idx].x + lm[r_sho_idx].x) * 0.5 * width,
+                (lm[l_sho_idx].y + lm[r_sho_idx].y) * 0.5 * height,
+            ], dtype=float)
+
+            # The torso is rigid, so it is a stabler ruler than the legs.
+            torso_px = float(np.linalg.norm(sho_px - hip_px))
+            hip_w = np.array([(wl[l_hip_idx].x + wl[r_hip_idx].x) * 0.5,
+                              (wl[l_hip_idx].y + wl[r_hip_idx].y) * 0.5,
+                              (wl[l_hip_idx].z + wl[r_hip_idx].z) * 0.5], dtype=float)
+            sho_w = np.array([(wl[l_sho_idx].x + wl[r_sho_idx].x) * 0.5,
+                              (wl[l_sho_idx].y + wl[r_sho_idx].y) * 0.5,
+                              (wl[l_sho_idx].z + wl[r_sho_idx].z) * 0.5], dtype=float)
+            torso_units = float(np.linalg.norm(sho_w - hip_w)) * float(self.scale)
+
+            hips_px.append(hip_px)
+            units_per_px.append(torso_units / torso_px if torso_px > 1e-6 else None)
+            world_y.append(-hip_w[1] * float(self.scale))
+
+        valid_scales = [s for s in units_per_px if s]
+        if not valid_scales:
+            return [default_root.copy() for _ in pose_frames]
+        # A single robust scale avoids per-frame jitter from torso foreshortening;
+        # perspective over a few seconds of walking varies far less than that noise.
+        median_scale = float(np.median(valid_scales))
+
+        # Pass 2: travel relative to the first tracked frame.
+        origin_px = next((p for p in hips_px if p is not None), np.zeros(2))
+
+        for i, frame in enumerate(pose_frames):
+            if hips_px[i] is None:
                 positions.append(positions[-1].copy() if positions else default_root.copy())
                 continue
 
-            l = frame.world_landmarks[l_hip_idx]
-            r = frame.world_landmarks[r_hip_idx]
-
-            hip_center = np.array([
-                (l.x + r.x) * 0.5,
-                -(l.y + r.y) * 0.5,
-                (l.z + r.z) * 0.5
-            ], dtype=float) * float(self.scale)
-
-            positions.append(hip_center)
+            delta_px = hips_px[i] - origin_px
+            positions.append(np.array([
+                delta_px[0] * median_scale,
+                world_y[i],
+                0.0,  # depth: MediaPipe Z is unreliable; see Z-dampening notes
+            ], dtype=float))
 
         if SMOOTHING_CONFIG.get('enable_temporal_smoothing', False) and len(positions) > 2:
             positions_arr = np.array(positions, dtype=float)
@@ -305,13 +366,94 @@ class ImprovedBVHConverter:
 
     def _process_motion_improved(self, pose_frames: List[PoseFrame]) -> List[Dict[str, np.ndarray]]:
         all_rotations = []
+        all_tracked = []
         for frame in pose_frames:
             if frame.is_valid():
-                frame_rotations = self._calculate_frame_rotations_improved(frame)
+                frame_rotations, tracked = self._calculate_frame_rotations_improved(frame)
             else:
-                frame_rotations = self._get_zero_rotations()
+                # Whole frame invalid: nothing tracked, everything gets filled
+                # from neighbouring valid frames below.
+                frame_rotations, tracked = self._get_zero_rotations(), {}
             all_rotations.append(frame_rotations)
+            all_tracked.append(tracked)
+        self._fill_untracked_rotations(all_rotations, all_tracked)
         return all_rotations
+
+    # Last-resort local rotations (deg, local XYZ) for arm joints that are NEVER
+    # tracked in a whole clip: hang the upper arm straight down instead of leaving
+    # it in the T-pose rest direction. Applied only when there is no tracked frame
+    # to hold/interpolate from. The forearm/hand stay at zero and follow the arm
+    # down. Signs verified by render against the Mixamo T-pose rest.
+    _ARM_DOWN_DEFAULT = {
+        'mixamorig:LeftArm': np.array([0.0, 0.0, -90.0]),
+        'mixamorig:RightArm': np.array([0.0, 0.0, 90.0]),
+    }
+
+    def _fill_untracked_rotations(self, all_rotations: List[Dict[str, np.ndarray]],
+                                  all_tracked: List[Dict[str, bool]]) -> None:
+        """Fill frames where a joint had no data-derived rotation.
+
+        Per joint: slerp between the bracketing tracked frames, hold the nearest
+        tracked value at the head/tail, and fall back to an arms-down default only
+        when a joint is never tracked anywhere in the clip. This replaces the old
+        behaviour where any occluded/low-visibility frame silently reverted the
+        bone to its T-pose rest direction (the "scarecrow arm").
+        """
+        from scipy.spatial.transform import Rotation, Slerp
+
+        n = len(all_rotations)
+        if n == 0:
+            return
+
+        filled_report = {}
+        for joint in self.skeleton_mapper.get_all_joints():
+            name = joint.name
+            anchors = [i for i in range(n) if all_tracked[i].get(name, False)]
+
+            if not anchors:
+                # Never tracked in this clip: arms hang down, everything else
+                # keeps its (zero) rest rotation.
+                default = self._ARM_DOWN_DEFAULT.get(name)
+                if default is not None:
+                    for i in range(n):
+                        all_rotations[i][name] = default.copy()
+                    filled_report[name] = n
+                continue
+
+            if len(anchors) == n:
+                continue  # fully tracked, nothing to fill
+
+            filled = 0
+            # Head: hold the first anchor backwards.
+            first = anchors[0]
+            for i in range(first):
+                all_rotations[i][name] = all_rotations[first][name].copy()
+                filled += 1
+            # Tail: hold the last anchor forwards.
+            last = anchors[-1]
+            for i in range(last + 1, n):
+                all_rotations[i][name] = all_rotations[last][name].copy()
+                filled += 1
+            # Interior gaps: slerp between consecutive anchors.
+            for a, b in zip(anchors, anchors[1:]):
+                if b - a <= 1:
+                    continue
+                key = Rotation.from_euler(
+                    'XYZ', np.array([all_rotations[a][name], all_rotations[b][name]]),
+                    degrees=True)
+                slerp = Slerp([a, b], key)
+                for i in range(a + 1, b):
+                    all_rotations[i][name] = slerp(i).as_euler('XYZ', degrees=True)
+                    filled += 1
+            if filled:
+                filled_report[name] = filled
+
+        if filled_report:
+            worst = sorted(filled_report.items(), key=lambda kv: -kv[1])[:4]
+            summary = ', '.join(f'{k.split(":")[-1]} {v}' for k, v in worst)
+            total = sum(filled_report.values())
+            print(f"  Filled {total} untracked joint-frames "
+                  f"(hold/slerp; worst: {summary})")
 
     @staticmethod
     def _safe_normalize(v: np.ndarray, eps: float = 1e-10) -> Optional[np.ndarray]:
@@ -459,6 +601,11 @@ class ImprovedBVHConverter:
 
         landmarks = frame.world_landmarks
         rotations = {joint.name: np.zeros(3) for joint in self.skeleton_mapper.get_all_joints()}
+        # Which joints got a real, data-derived rotation this frame (vs. left at
+        # rest/zero). Frames where a joint is NOT tracked are filled later by
+        # holding/slerping neighbours, so an occluded arm no longer snaps to the
+        # T-pose rest direction.
+        tracked = {}
         skeleton = self.skeleton_mapper.skeleton
 
         torso_basis = self._calculate_torso_basis(landmarks)
@@ -568,6 +715,7 @@ class ImprovedBVHConverter:
                     local_rotation_euler = calculated_euler
                     local_rot_obj = Rotation.from_euler('XYZ', calculated_euler, degrees=True)
                     global_rotation = parent_rotation * local_rot_obj
+                tracked[joint.name] = True
 
             rotations[joint.name] = local_rotation_euler
 
@@ -575,7 +723,7 @@ class ImprovedBVHConverter:
                 process_joint(child, global_rotation)
 
         process_joint(skeleton, Rotation.identity())
-        return rotations
+        return rotations, tracked
 
     def _calculate_head_global_rotation(self, landmarks, torso_basis: Optional[Tuple[np.ndarray, np.ndarray, np.ndarray]] = None) -> Optional[np.ndarray]:
         """
@@ -846,6 +994,8 @@ def main():
                   f"trailing frames without a detected person")
             pose_frames = pose_frames[first:last + 1]
         pose_frames = extractor.interpolate_missing_frames(pose_frames)
+        source_fps = extractor.effective_fps
+        frame_size = (extractor.frame_width, extractor.frame_height)
 
     if args.face:
         cap = mp.solutions.cv2.VideoCapture(args.video) if hasattr(mp.solutions, "cv2") else None
@@ -864,7 +1014,8 @@ def main():
             idx += 1
         cap.release()
 
-    converter = ImprovedBVHConverter(enable_face=args.face)
+    converter = ImprovedBVHConverter(enable_face=args.face, fps=source_fps,
+                                     frame_size=frame_size)
     try:
         success = converter.convert(pose_frames, args.output)
     finally:

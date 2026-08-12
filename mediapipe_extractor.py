@@ -48,6 +48,9 @@ class MediaPipeExtractor:
         self.use_holistic = use_holistic
         self.model = None
         self.sample_rate = PROCESSING_CONFIG['sample_rate']
+        self.effective_fps = None  # source FPS / sample_rate, set during extraction
+        self.frame_width = None    # source pixel dimensions, set during extraction
+        self.frame_height = None
 
     def __enter__(self):
         """Context manager entry."""
@@ -91,6 +94,11 @@ class MediaPipeExtractor:
         width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
         height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
         
+        # Playback rate of the extracted frames, used for the BVH frame time.
+        if fps and fps > 0:
+            self.effective_fps = fps / max(1, self.sample_rate)
+        self.frame_width, self.frame_height = width, height
+
         print(f"Video properties: {width}x{height}, {fps:.1f} FPS, {frame_count} frames")
         print(f"Sampling every {self.sample_rate} frames")
         
